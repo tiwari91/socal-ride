@@ -97,7 +97,11 @@ export class Sky {
 		// environment map for chrome and paint, regenerated as the light changes
 		this.pmrem = new THREE.PMREMGenerator(renderer);
 		this.envScene = new THREE.Scene();
-		this.envDome = new THREE.Mesh(new THREE.SphereGeometry(10, 32, 16), mat);
+		// the environment sees a darker ground so chrome keeps contrast
+		const envU = Object.assign({}, this.uniforms, { uGround: { value: new THREE.Color("#3a3128") } });
+		const envMat = new THREE.ShaderMaterial({ vertexShader: SKY_VS, fragmentShader: SKY_FS, uniforms: envU, side: THREE.BackSide, depthWrite: false });
+		this.envGround = envU.uGround.value;
+		this.envDome = new THREE.Mesh(new THREE.SphereGeometry(10, 32, 16), envMat);
 		this.envScene.add(this.envDome);
 		this.envTarget = null;
 		this.lastEnv = { el: -999, gloom: -1 };
@@ -140,6 +144,7 @@ export class Sky {
 		const hz = U.uHorizon.value;
 		const grey = this.tmp.a.set("#a6adb2");
 		U.uGround.value.copy(hz).lerp(grey, gloom * 0.6).multiplyScalar(0.92);
+		if (this.envGround) this.envGround.copy(this.hemi ? this.hemi.groundColor : hz).multiplyScalar(0.35);
 		// lights
 		this.sun.color.copy(A[3]).lerp(B[3], t);
 		this.sun.intensity = lerp(A[4], B[4], t) * 0.62 * (1 - gloom * 0.72);

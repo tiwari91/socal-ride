@@ -37,7 +37,7 @@ export class Bike {
 		void envMap;
 		this.m = {
 			paint: std({ color: 0xffffff, vertexColors: true, metalness: 0.35, roughness: 0.22 }),
-			chrome: std({ color: 0xe8ebee, metalness: 1, roughness: 0.13 }),
+			chrome: std({ color: 0xc9ced3, metalness: 1, roughness: 0.16 }),
 			satin: std({ color: 0xb9bcc0, metalness: 0.85, roughness: 0.38 }),
 			black: std({ color: 0x15161a, metalness: 0.4, roughness: 0.45 }),
 			rubber: std({ color: 0x141414, metalness: 0, roughness: 0.92 }),
@@ -255,9 +255,11 @@ export class Bike {
 			bag.scale(0.52, 1.05, 1.05);
 			bag.translate(sx * 0.26, 0.6, -0.72);
 			this.add(bag, m.leather);
-			const lid = new THREE.BoxGeometry(0.17, 0.05, 0.48);
-			lid.translate(sx * 0.26, 0.76, -0.72);
-			this.add(lid, m.leatherDark);
+			const flap = new THREE.CapsuleGeometry(0.15, 0.2, 4, 10, );
+			flap.rotateX(Math.PI / 2);
+			flap.scale(0.56, 0.5, 1.02);
+			flap.translate(sx * 0.262, 0.7, -0.72);
+			this.add(flap, m.leatherDark);
 			for (const dz of [-0.12, 0.12]) {
 				const strap = new THREE.BoxGeometry(0.012, 0.2, 0.035);
 				strap.translate(sx * 0.345, 0.66, -0.72 + dz);

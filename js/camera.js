@@ -3,7 +3,7 @@
 import { clamp, damp, lerp, smoothstep } from "./util.js";
 
 export const VIEWS = ["chase", "side", "low", "drone"];
-const LABEL = { chase: "Chase", side: "Side", low: "Low", drone: "Drone" };
+const LABEL = { chase: "Chase", side: "Side", low: "Low", drone: "Drone", finale: "Sunset" };
 
 export class CameraRig {
 	constructor(camera, ground) {
@@ -55,6 +55,14 @@ export class CameraRig {
 				out.pos.copy(p).addScaledVector(r, side * (5.2 + sp + tall * 4)).addScaledVector(f, 1.2 + a * 3).add({ x: 0, y: 1.25 + tall * 0.6, z: 0 });
 				out.look.copy(p).addScaledVector(f, 0.8).add({ x: 0, y: 0.95, z: 0 });
 				out.fov = 50 + tall * 14;
+				break;
+			}
+			case "finale": {
+				// across the bike toward the sea and the setting sun
+				const a = Math.sin(t * 0.05) * 0.35;
+				out.pos.copy(p).addScaledVector(r, -6.5).addScaledVector(f, 2.5 + a * 4).add({ x: 0, y: 1.7, z: 0 });
+				out.look.copy(p).addScaledVector(r, 14).addScaledVector(f, -3).add({ x: 0, y: 2.2, z: 0 });
+				out.fov = 52 + tall * 16;
 				break;
 			}
 			case "low": {

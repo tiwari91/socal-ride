@@ -150,7 +150,7 @@ body.started .loader { opacity: 0; pointer-events: none; }
 .primary { border: 0; background: var(--accent); color: var(--accent-ink); font-weight: 600; font-size: 16px; padding: 12px 26px; border-radius: 999px; box-shadow: 0 6px 18px rgba(217, 101, 42, 0.32); }
 .primary:disabled { opacity: 0.35; box-shadow: none; cursor: default; }
 .credit-small { font-size: 11px; opacity: 0.55; margin-top: 22px; }
-.finale { position: fixed; inset: 0; display: grid; place-items: center; z-index: 6; padding: 16px; pointer-events: none; }
+.finale { position: fixed; inset: 0; display: flex; align-items: flex-start; justify-content: center; z-index: 6; padding: calc(70px + var(--safe-t)) 16px 16px; pointer-events: none; }
 .finale[hidden] { display: none; }
 .finale-in { pointer-events: auto; border-radius: 22px; padding: 22px 24px; max-width: 420px; text-align: center; color: var(--ink); }
 .finale h2 { font-family: var(--display); font-weight: 600; font-size: 26px; margin: 6px 0 8px; }

@@ -80,16 +80,19 @@ export class Rider {
 				vt = Math.min(vt, cruiseSpeed(r.kind[j], zone) * this.pace + a * 0.05);
 			}
 			const left = r.length - 40 - this.s;
-			if (left < 400) vt = Math.min(vt, Math.max(0, Math.sqrt(Math.max(0, left) * 1.6)));
+			if (left < 400) vt = Math.min(vt, left < 1.5 ? 0 : Math.max(2.2, Math.sqrt(left * 1.4)));
 			if (this.lead) vt = Math.min(vt, this.lead.v + (this.lead.gap - 18) * 0.25);
 			vt = Math.max(0, vt);
-			accel = clamp((vt - this.v) * 0.6, -3.5, 1.6);
+			accel = clamp((vt - this.v) * (left < 6 ? 2 : 0.6), -3.5, 1.6);
 			this.throttle = clamp((vt - this.v) * 0.4 + 0.25, 0, 1);
 			const dT = this.laneTarget(i);
 			const want = clamp((dT - this.d) * 0.5, -1.1, 1.1);
 			const psiT = Math.asin(clamp(want / Math.max(this.v, 2), -0.4, 0.4));
 			psiDot = (psiT - this.psi) * 3;
-			if (left < 3 && this.v < 0.3) this.finished = true;
+			if (left < 3 && this.v < 0.5) {
+				this.v = Math.max(0, this.v - dt * 2);
+				this.finished = true;
+			}
 		} else {
 			const inp = this.input;
 			const v = this.v;

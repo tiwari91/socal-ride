@@ -270,10 +270,12 @@ async function start() {
 		if (rider.finished && !app.finaleCam) {
 			app.finaleCam = true;
 			rig.auto = false;
-			rig.side = -1;
-			rig.set("side");
+			rig.set("finale");
 		}
-		if (!rider.finished) app.finaleCam = false;
+		if (!rider.finished) {
+			if (app.finaleCam && rig.view === "finale") rig.set("chase");
+			app.finaleCam = false;
+		}
 		buildings.setNight(night);
 		ocean.update(dt, sky);
 		app.lead = traffic.update(dt, { s: rider.s, d: rider.d, v: rider.v });
