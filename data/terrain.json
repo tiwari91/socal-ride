@@ -1,0 +1,9 @@
+{
+ "source": "NOAA ETOPO1 (etopo180) via ERDDAP, metres",
+ "rows": 70,
+ "cols": 100,
+ "north": 34.45,
+ "south": 33.3,
+ "west": -118.25,
+ "east": -116.6
+}

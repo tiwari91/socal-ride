@@ -1,0 +1,5 @@
+raw/
+tests/shots/
+node_modules/
+.DS_Store
+__pycache__/

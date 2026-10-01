@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Citrus to Surf</title>
+<meta name="description" content="A scenic 3D motorcycle ride through Southern California: Redlands, Riverside, Santa Ana Canyon, Fullerton, Irvine, Newport and Laguna Beach at sunset.">
+<meta name="theme-color" content="#f4ead8">
+<link rel="icon" href="assets/logo.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Inter:wght@400;500;600&family=Overpass:wght@700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<canvas id="scene" aria-label="3D view of the ride"></canvas>
+
+<div id="hud" class="hud">
+	<header class="top">
+		<div class="brand">
+			<img src="assets/logo.svg" alt="" class="logo" width="34" height="34">
+			<div class="brand-text">
+				<div class="name">Citrus to Surf</div>
+				<div class="where" id="where">Redlands</div>
+			</div>
+		</div>
+		<nav class="icons">
+			<button class="ic" id="btn-chapters" aria-label="Chapters" title="Chapters">
+				<svg viewBox="0 0 24 24"><path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0C18.5 15.4 12 21 12 21z"/><circle cx="12" cy="10" r="2.4"/></svg>
+			</button>
+			<button class="ic" id="btn-sound" aria-label="Sound" title="Sound (muted)">
+				<svg viewBox="0 0 24 24" class="on"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/></svg>
+				<svg viewBox="0 0 24 24" class="off"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M16 9.5l5 5M21 9.5l-5 5"/></svg>
+			</button>
+			<button class="ic" id="btn-music" aria-label="Ambient music" title="Ambient music">
+				<svg viewBox="0 0 24 24"><path d="M9 18V6l10-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="16.5" cy="16" r="2.5"/></svg>
+			</button>
+			<button class="ic" id="btn-settings" aria-label="Settings" title="Settings">
+				<svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>
+			</button>
+			<button class="ic" id="btn-theme" aria-label="Toggle light or dark theme" title="Theme">
+				<svg viewBox="0 0 24 24" class="sun"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M5.3 18.7l1.6-1.6M17.1 6.9l1.6-1.6"/></svg>
+				<svg viewBox="0 0 24 24" class="moon"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg>
+			</button>
+		</nav>
+	</header>
+
+	<div id="card" class="card" aria-live="polite"><div class="card-kicker" id="card-kicker">Chapter 1</div><div class="card-title" id="card-title">Redlands</div><div class="card-line" id="card-line"></div></div>
+	<div id="toast" class="toast" aria-live="polite"></div>
+
+	<div class="bottom">
+		<div class="map panel" id="map-wrap"><canvas id="minimap" width="300" height="300" aria-label="Route map"></canvas><div class="map-meta" id="map-meta">0 mi</div></div>
+		<div class="center">
+			<div class="seg" role="tablist" aria-label="Mode">
+				<button id="mode-cruise" class="active" role="tab" aria-selected="true">Cruise</button>
+				<button id="mode-ride" role="tab" aria-selected="false">Ride</button>
+			</div>
+			<button class="chip" id="btn-cam" title="Camera (C)"><svg viewBox="0 0 24 24"><path d="M4 8h3l2-2.5h6L17 8h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg><span id="cam-label">Chase</span></button>
+		</div>
+		<div class="speedo panel" id="speedo">
+			<svg viewBox="0 0 120 120" class="gauge" aria-hidden="true">
+				<path class="track" d="M 25.4 94.6 A 49 49 0 1 1 94.6 94.6"/>
+				<path class="fill" id="gauge-fill" d="M 25.4 94.6 A 49 49 0 1 1 94.6 94.6"/>
+				<g id="ticks"></g>
+				<line id="needle" x1="60" y1="60" x2="60" y2="20"/>
+				<circle cx="60" cy="60" r="3.2" class="hub"/>
+			</svg>
+			<div class="readout"><span id="mph">0</span><small>mph</small></div>
+			<div class="gear"><span id="gear">1</span><i id="rpm"></i></div>
+		</div>
+	</div>
+
+	<div class="touch" id="touch" aria-hidden="true">
+		<div class="pad left"><button id="t-left" aria-label="Steer left">&#9664;</button><button id="t-right" aria-label="Steer right">&#9654;</button></div>
+		<div class="pad right"><button id="t-brake" aria-label="Brake">Brake</button><button id="t-gas" aria-label="Throttle">Throttle</button></div>
+	</div>
+	<div class="hint" id="hint">Arrows or WASD to ride &middot; C camera &middot; M mode</div>
+</div>
+
+<aside id="chapters" class="sheet" hidden>
+	<div class="sheet-head"><h2>Chapters</h2><button class="x" data-close aria-label="Close">&times;</button></div>
+	<ol id="chapter-list"></ol>
+</aside>
+
+<aside id="settings" class="sheet" hidden>
+	<div class="sheet-head"><h2>Settings</h2><button class="x" data-close aria-label="Close">&times;</button></div>
+	<div class="row"><label>Time of day</label>
+		<div class="seg small" id="time-mode"><button data-v="auto" class="active">Follow the ride</button><button data-v="manual">Manual</button></div>
+	</div>
+	<div class="row"><input type="range" id="time" min="6" max="20" step="0.05" value="10" aria-label="Hour"><span id="time-label" class="val">10:00</span></div>
+	<div class="row"><label>Weather</label>
+		<div class="seg small" id="weather"><button data-v="clear" class="active">Clear</button><button data-v="gloom">June Gloom</button></div>
+	</div>
+	<div class="row"><label>Cruise pace</label>
+		<div class="seg small" id="pace"><button data-v="1" class="active">Easy</button><button data-v="1.3">Brisk</button></div>
+	</div>
+	<div class="row"><label>Paint</label><div class="swatches" id="paint"></div></div>
+	<div class="row"><label>Quality</label>
+		<div class="seg small" id="quality"><button data-v="low">Low</button><button data-v="medium">Medium</button><button data-v="high">High</button></div>
+	</div>
+	<p class="note" id="quality-note">Quality changes reload the ride.</p>
+	<p class="credits">Map data &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a> (ODbL). Elevation: NOAA ETOPO1. Three.js. <a href="https://github.com/tiwari91/socal-ride" target="_blank" rel="noopener">Source</a></p>
+</aside>
+
+<div id="finale" class="finale" hidden>
+	<div class="finale-in panel">
+		<div class="card-kicker">Laguna Beach</div>
+		<h2>End of the road, for today.</h2>
+		<p id="finale-line">You rode from the orange groves of Redlands to the Pacific at sunset.</p>
+		<div class="finale-btns"><button id="again" class="primary">Ride again</button><button id="finale-chapters">Pick a chapter</button></div>
+	</div>
+</div>
+
+<div id="loader" class="loader">
+	<div class="loader-in">
+		<img src="assets/logo.svg" alt="" width="72" height="72">
+		<h1>Citrus to Surf</h1>
+		<p class="tag">A slow ride across Southern California, from the orange groves of Redlands to the Laguna Beach sunset.</p>
+		<div class="bar"><i id="load-bar"></i></div>
+		<div id="load-msg" class="load-msg">Loading</div>
+		<button id="start" class="primary" disabled>Start the ride</button>
+		<p class="credit-small">Map data &copy; OpenStreetMap contributors &middot; Elevation NOAA ETOPO1</p>
+	</div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/0.147.0/three.min.js"></script>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
