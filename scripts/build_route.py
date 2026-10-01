@@ -43,7 +43,7 @@ WAYPOINTS = [
     ("MacArthur Boulevard", 33.6200, -117.8650),
     ("Pacific Coast Highway", 33.5900, -117.8650),
     ("Pacific Coast Highway", 33.5650, -117.8300),
-    ("Pacific Coast Highway", 33.5390, -117.7790),
+    ("Pacific Coast Highway", 33.5412, -117.7838),
 ]
 
 CHAPTERS = [

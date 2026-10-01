@@ -145,7 +145,7 @@ export class Sky {
 		this.sun.intensity = lerp(A[4], B[4], t) * 0.62 * (1 - gloom * 0.72);
 		this.hemi.color.copy(A[5]).lerp(B[5], t).lerp(grey, gloom * 0.5);
 		this.hemi.groundColor.copy(A[6]).lerp(B[6], t);
-		this.hemi.intensity = lerp(A[7], B[7], t) * 0.75 * (1 + gloom * 0.35);
+		this.hemi.intensity = lerp(A[7], B[7], t) * lerp(1.0, 0.75, smoothstep(2, 20, el)) * (1 + gloom * 0.35);
 		// haze colour follows the horizon; sun-side haze glows warm
 		const fog = this.scene.fog;
 		fog.color.copy(hz).lerp(grey, gloom * 0.7);

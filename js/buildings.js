@@ -82,7 +82,7 @@ export class Buildings {
 			sh.fragmentShader = sh.fragmentShader
 				.replace("#include <common>", "#include <common>\n" + NOISE_GLSL + FRAG)
 				.replace("#include <color_fragment>", "#include <color_fragment>\nfloat litW;\ndiffuseColor.rgb = facade(diffuseColor.rgb, litW);")
-				.replace("#include <emissivemap_fragment>", "#include <emissivemap_fragment>\ntotalEmissiveRadiance += vec3(1.0, 0.72, 0.4) * litW * 0.9;");
+				.replace("#include <emissivemap_fragment>", "#include <emissivemap_fragment>\ntotalEmissiveRadiance += vec3(1.0, 0.62, 0.3) * litW * 0.32;");
 		}, "bld");
 	}
 

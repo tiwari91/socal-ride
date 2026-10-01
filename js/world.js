@@ -128,6 +128,8 @@ export function coastDistance(x, z, maxR = 4000) {
 // Full natural terrain height (no road shaping).
 export function terrainHeight(x, z, cd) {
 	let h = baseHeight(x, z);
+	// gentle vertical exaggeration of the high country so the ranges read from the valley floor
+	h += Math.max(0, h - 450) * 0.55;
 	// procedural relief that grows with altitude so mountains get ridges
 	const rough = 8 + 70 * smoothstep(250, 900, h) + 160 * smoothstep(900, 2400, h);
 	const ridged = 1 - Math.abs(noise2(x / 2300, z / 2300));

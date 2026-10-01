@@ -14,6 +14,7 @@ import { Input, Rider } from "./ride.js";
 import { CameraRig } from "./camera.js";
 import { PRESETS, defaultQuality } from "./quality.js";
 import { Buildings } from "./buildings.js";
+import { Streets } from "./streets.js";
 import { buildSigns } from "./signs.js";
 import { buildLandmarks } from "./landmarks.js";
 import { Traffic } from "./traffic.js";
@@ -95,6 +96,7 @@ async function start() {
 	scene.add(ground.group);
 	const far = buildFarTerrain(ground, Q);
 	scene.add(far.mesh);
+	app.far = far;
 	progress(0.42, "Laying the asphalt");
 	await nextFrame();
 	const roads = new Roads(route, ground, Q);
@@ -108,6 +110,9 @@ async function start() {
 	const buildings = new Buildings(route, ground, data.scenery.buildings || [], Q);
 	scene.add(buildings.group);
 	app.buildings = buildings;
+	const streets = new Streets(route, ground, data.scenery.streets || [], Q);
+	scene.add(streets.group);
+	app.streets = streets;
 	try {
 		await document.fonts.load("700 40px Overpass");
 	} catch (e) {
@@ -128,7 +133,7 @@ async function start() {
 	const bike = new Bike(null, store.get("paint", "burgundy"));
 	scene.add(bike.root);
 	app.bike = bike;
-	const head = new THREE.SpotLight(0xfff1d6, 0, 90, 0.42, 0.55, 1.2);
+	const head = new THREE.SpotLight(0xfff1d6, 0, 70, 0.36, 0.6, 1.6);
 	head.position.copy(bike.headPos);
 	head.target.position.set(0, -0.6, 14);
 	bike.steer.children[0].add(head, head.target);
@@ -161,7 +166,7 @@ async function start() {
 	async function warm(s, prog) {
 		roads.ensure(s);
 		let guard = 0;
-		while ((ground.update(s, 30) > 0 || scenery.update(s) > 0 || buildings.update(s) > 0) && guard++ < 600) {
+		while ((ground.update(s, 30) > 0 || scenery.update(s) > 0 || buildings.update(s) > 0 || streets.update(s) > 0) && guard++ < 600) {
 			if (prog) prog(0.5 + 0.48 * (1 - ground.pendingCount() / Math.max(1, ground.tiles.size)), "Planting the groves");
 			await nextFrame();
 		}
@@ -235,7 +240,8 @@ async function start() {
 		rr.set(-fz, 0, fx);
 		B.v = rider.v;
 		B.lean = rider.lean;
-		B.prefSide = route.zoneAt(rider.s) === "laguna" || route.zoneAt(rider.s) === "coast" ? 1 : 0;
+		B.prefSide = route.zoneAt(rider.s) === "laguna" || route.zoneAt(rider.s) === "coast" ? -1 : 0;
+		B.aspect = camera.aspect;
 		bike.root.position.copy(B.p);
 		bike.root.rotation.set(-Math.atan(P.grade), Math.atan2(fx, fz), 0, "YXZ");
 		const bump = 0.006 * noise2(rider.s * 0.45, 3) * clamp(rider.v / 10, 0, 1);
@@ -257,9 +263,17 @@ async function start() {
 			if (env) scene.environment = env;
 		}
 		const night = sky.state.night;
-		head.intensity = smoothstep(0.15, 0.6, night) * 3.2;
+		head.intensity = smoothstep(0.15, 0.6, night) * 1.8;
 		bike.setLights(night > 0.3);
 		scenery.setNight(night);
+		scenery.sunDir.copy(sky.uniforms.uSunDir.value);
+		if (rider.finished && !app.finaleCam) {
+			app.finaleCam = true;
+			rig.auto = false;
+			rig.side = -1;
+			rig.set("side");
+		}
+		if (!rider.finished) app.finaleCam = false;
 		buildings.setNight(night);
 		ocean.update(dt, sky);
 		app.lead = traffic.update(dt, { s: rider.s, d: rider.d, v: rider.v });
@@ -273,10 +287,15 @@ async function start() {
 		});
 		ui.update(dt);
 		fogUniforms.uTime.value = app.t;
-		roads.update(rider.s);
-		ground.update(rider.s, Q.budget);
-		scenery.update(rider.s);
-		buildings.update(rider.s);
+		// streaming work is spread over frames
+		const phase = app.frames % 4;
+		if (phase === 0) roads.update(rider.s);
+		ground.update(rider.s, phase === 1 ? Q.budget : Q.budget * 0.5);
+		if (phase === 2) scenery.update(rider.s);
+		if (phase === 3) {
+			buildings.update(rider.s);
+			streets.update(rider.s);
+		}
 		renderer.render(scene, camera);
 		app.frames++;
 		app.zone = zone;

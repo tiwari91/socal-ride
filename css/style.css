@@ -92,9 +92,9 @@ body.hide-hud .hud { opacity: 0 !important; }
 .gauge .fill { stroke: var(--accent); stroke-dasharray: 231 231; stroke-dashoffset: 231; transition: stroke-dashoffset 0.15s linear; }
 .gauge #ticks line { stroke: var(--muted); stroke-width: 1.2; }
 .gauge #ticks text { fill: var(--muted); font-size: 7px; font-family: var(--ui); text-anchor: middle; dominant-baseline: middle; }
-.gauge #needle { stroke: var(--ink); stroke-width: 2.2; stroke-linecap: round; transform-origin: 60px 60px; }
+.gauge #needle { stroke: var(--ink); stroke-width: 3; stroke-linecap: round; transform-origin: 60px 60px; transition: transform 0.12s linear; }
 .gauge .hub { fill: var(--ink); }
-.readout { position: absolute; left: 0; right: 0; top: 64%; transform: translateY(-50%); text-align: center; line-height: 1; }
+.readout { position: absolute; left: 0; right: 0; top: 52%; transform: translateY(-50%); text-align: center; line-height: 1; }
 .readout span { font-family: var(--display); font-size: 30px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .readout small { display: block; font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted); margin-top: 2px; }
 .gear { position: absolute; left: 50%; bottom: 10%; transform: translateX(-50%); display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--muted); font-weight: 600; }
@@ -169,6 +169,7 @@ body.started .loader { opacity: 0; pointer-events: none; }
 	.map { width: 104px; height: 104px; border-radius: 14px; }
 	.speedo { width: 112px; height: 112px; }
 	.readout span { font-size: 25px; }
+	.gauge #ticks text { display: none; }
 	.seg button { padding: 7px 13px; font-size: 13px; }
 	.toast { bottom: calc(128px + var(--safe-b)); font-size: 12px; }
 	.touch { bottom: calc(132px + var(--safe-b)); }

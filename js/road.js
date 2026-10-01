@@ -3,7 +3,7 @@
 // Built in chunks along the route and streamed with the rider.
 import { clamp, hash2, lerp, merge, noise2, paint, withFog } from "./util.js";
 import { KIND } from "./route.js";
-import { NOISE_GLSL } from "./ground.js";
+import { NOISE_GLSL, groundDetail } from "./ground.js";
 
 const CH = 50; // samples per chunk (300 m)
 
@@ -112,7 +112,15 @@ export function roadMaterial() {
 			.replace("#include <worldpos_vertex>", "#include <worldpos_vertex>\nvWpos = (modelMatrix * vec4(transformed, 1.0)).xyz;");
 		shader.fragmentShader = shader.fragmentShader
 			.replace("#include <common>", "#include <common>\nvarying vec4 vR1;\nvarying vec4 vR2;\nvarying vec3 vWpos;\n" + NOISE_GLSL + ROAD_FRAG)
-			.replace("#include <map_fragment>", "diffuseColor.rgb = roadColor(vR1, vR2, vWpos);");
+			.replace("#include <map_fragment>", "diffuseColor.rgb = roadColor(vR1, vR2, vWpos);")
+			.replace("#include <emissivemap_fragment>", `#include <emissivemap_fragment>
+			#ifdef USE_FOG
+			{
+				// grazing sky sheen on the asphalt, strongest at golden hour
+				float ndv = abs(dot(normalize(-vViewPosition), normal));
+				totalEmissiveRadiance += mix(fogColor, fogSunColor, 0.5) * pow(1.0 - ndv, 5.0) * 0.32;
+			}
+			#endif`);
 	}, "road");
 }
 
@@ -124,7 +132,7 @@ export class Roads {
 		this.group = new THREE.Group();
 		this.chunks = new Map();
 		this.mat = roadMaterial();
-		this.propMat = withFog(new THREE.MeshLambertMaterial({ vertexColors: true }), null, "prop");
+		this.propMat = withFog(new THREE.MeshLambertMaterial({ vertexColors: true }), groundDetail, "prop");
 		this.wallMask = this.computeWalls();
 	}
 

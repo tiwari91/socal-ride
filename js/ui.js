@@ -325,13 +325,20 @@ export class UI {
 		if (this.hintT > 0 && (this.hintT -= dt) <= 0) $("hint").classList.remove("show");
 		// speedometer
 		const mph = rider.mph;
-		$("mph").textContent = Math.round(mph);
-		const f = clamp(mph / 100, 0, 1);
-		$("needle").style.transform = `rotate(${-135 + f * 270}deg)`;
-		$("gauge-fill").style.strokeDashoffset = 231 * (1 - f);
-		$("gear").textContent = rider.v < 0.3 ? "N" : rider.gear;
-		$("rpm").style.setProperty("--rpm", `${clamp(rider.rpm / 5200, 0, 1) * 100}%`);
-		$("cam-label").textContent = app.rig.label();
+		const m = Math.round(mph);
+		if (m !== this._mph) {
+			this._mph = m;
+			$("mph").textContent = m;
+			const f = clamp(mph / 100, 0, 1);
+			$("needle").style.transform = `rotate(${-135 + f * 270}deg)`;
+			$("gauge-fill").style.strokeDashoffset = 231 * (1 - f);
+		}
+		const gear = rider.v < 0.3 ? "N" : String(rider.gear);
+		if (gear !== this._gear) $("gear").textContent = this._gear = gear;
+		const rpm = Math.round(clamp(rider.rpm / 5200, 0, 1) * 20) * 5;
+		if (rpm !== this._rpm) $("rpm").style.setProperty("--rpm", `${(this._rpm = rpm)}%`);
+		const cam = app.rig.label();
+		if (cam !== this._cam) $("cam-label").textContent = this._cam = cam;
 		// location
 		const c = this.route.chapters[k].name;
 		const road = this.route.nameAt(rider.s);

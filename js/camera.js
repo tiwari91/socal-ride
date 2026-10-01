@@ -46,13 +46,15 @@ export class CameraRig {
 		const f = b.f, r = b.r, p = b.p;
 		const t = this.t;
 		const sp = clamp(b.v / 30, 0, 1);
+		// portrait screens: pull back and widen so the bike does not fill the frame
+		const tall = clamp((1.15 - (b.aspect || 1.6)) / 0.7, 0, 1);
 		switch (view) {
 			case "side": {
 				const a = Math.sin(t * 0.07) * 0.5;
 				const side = b.prefSide || this.side;
-				out.pos.copy(p).addScaledVector(r, side * (5.2 + sp)).addScaledVector(f, 1.2 + a * 3).add({ x: 0, y: 1.25, z: 0 });
+				out.pos.copy(p).addScaledVector(r, side * (5.2 + sp + tall * 4)).addScaledVector(f, 1.2 + a * 3).add({ x: 0, y: 1.25 + tall * 0.6, z: 0 });
 				out.look.copy(p).addScaledVector(f, 0.8).add({ x: 0, y: 0.95, z: 0 });
-				out.fov = 50;
+				out.fov = 50 + tall * 14;
 				break;
 			}
 			case "low": {
@@ -70,10 +72,10 @@ export class CameraRig {
 				break;
 			}
 			default: {
-				const back = 4.9 + sp * 1.1;
-				out.pos.copy(p).addScaledVector(f, -back).addScaledVector(r, 0.35).add({ x: 0, y: 1.72 + sp * 0.25, z: 0 });
-				out.look.copy(p).addScaledVector(f, 4.5).add({ x: 0, y: 1.0, z: 0 });
-				out.fov = 54 + sp * 6;
+				const back = 4.9 + sp * 1.1 + tall * 3.2;
+				out.pos.copy(p).addScaledVector(f, -back).addScaledVector(r, 0.35).add({ x: 0, y: 1.72 + sp * 0.25 + tall * 0.9, z: 0 });
+				out.look.copy(p).addScaledVector(f, 4.5 + tall * 3).add({ x: 0, y: 1.0 + tall * 0.6, z: 0 });
+				out.fov = 54 + sp * 6 + tall * 16;
 			}
 		}
 		return out;
@@ -96,18 +98,22 @@ export class CameraRig {
 			tl = Bp.look.lerp(A.look, w);
 			fov = lerp(Bp.fov, A.fov, w);
 		}
+		// damp in bike-relative space so speed never drags the camera into the bike
+		const relP = tp.clone().sub(b.p), relL = tl.clone().sub(b.p);
 		if (!this.init) {
-			this.pos.copy(tp);
-			this.look.copy(tl);
+			this.rp = relP.clone();
+			this.rl = relL.clone();
 			this.init = true;
 		}
-		const k = this.view === "drone" ? 2.5 : 6;
-		this.pos.x = damp(this.pos.x, tp.x, k, dt);
-		this.pos.y = damp(this.pos.y, tp.y, k, dt);
-		this.pos.z = damp(this.pos.z, tp.z, k, dt);
-		this.look.x = damp(this.look.x, tl.x, 9, dt);
-		this.look.y = damp(this.look.y, tl.y, 9, dt);
-		this.look.z = damp(this.look.z, tl.z, 9, dt);
+		const k = this.view === "drone" ? 2.5 : 5;
+		this.rp.x = damp(this.rp.x, relP.x, k, dt);
+		this.rp.y = damp(this.rp.y, relP.y, k, dt);
+		this.rp.z = damp(this.rp.z, relP.z, k, dt);
+		this.rl.x = damp(this.rl.x, relL.x, 8, dt);
+		this.rl.y = damp(this.rl.y, relL.y, 8, dt);
+		this.rl.z = damp(this.rl.z, relL.z, 8, dt);
+		this.pos.copy(b.p).add(this.rp);
+		this.look.copy(b.p).add(this.rl);
 		// keep above the ground
 		const gh = this.ground.height(this.pos.x, this.pos.z);
 		if (this.pos.y < gh + 0.3) this.pos.y = gh + 0.3;

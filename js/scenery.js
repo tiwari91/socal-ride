@@ -56,7 +56,7 @@ export class Scenery {
 			mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
 			mesh.count = 0;
 			mesh.frustumCulled = false;
-			mesh.castShadow = !!T.shadow && quality.shadows;
+			mesh.castShadow = false;
 			mesh.receiveShadow = false;
 			mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(cap * 3), 3);
 			this.pools[k] = { mesh, cap };
@@ -65,6 +65,16 @@ export class Scenery {
 		this.indexStreets(scenery.streets || []);
 		this.indexBuildings(scenery.buildings || []);
 		this.findIntersections(scenery.streets || []);
+		// soft contact shadows under trees (cheap, no shadow map)
+		const disc = new THREE.CircleGeometry(1, 14);
+		disc.rotateX(-Math.PI / 2);
+		this.discCap = 9000;
+		this.disc = new THREE.InstancedMesh(disc, new THREE.MeshBasicMaterial({ color: 0x101408, transparent: true, opacity: 0.26, depthWrite: false, fog: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }), this.discCap);
+		this.disc.frustumCulled = false;
+		this.disc.count = 0;
+		this.disc.renderOrder = 1;
+		this.group.add(this.disc);
+		this.sunDir = new THREE.Vector3(0.3, 0.8, 0.3);
 		// glow sprites for lamps at dusk
 		this.glowGeo = new THREE.BufferGeometry();
 		this.glowGeo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(3 * 2000), 3));
@@ -279,7 +289,7 @@ export class Scenery {
 				const s = q.s;
 				const zone = r.zoneAt(s);
 				const lu = this.ground.landAt(x, z);
-				const groveZone = (zone === "ie-freeway" && ((s > 5200 && s < 13000) || (s > 26500 && s < 42000))) || zone === "redlands";
+				const groveZone = (zone === "ie-freeway" && ((s > 5200 && s < 13000) || (s > 26500 && s < 42000))) || (zone === "redlands" && s > 2600);
 				const grove = lu === "orchard" || (groveZone && lu !== "green" && lu !== "golf" && noise2(x / 520, z / 520) > 0.12 && e > 14 && e < 125 && !this.roads.wallMask[q.i]);
 				if (grove) {
 					if (hash2(gx, gz) > 0.93) continue;
@@ -348,6 +358,13 @@ export class Scenery {
 		const { m, q, p, s, c, up } = this.tmp;
 		const glow = this.glowGeo.attributes.position.array;
 		let g = 0;
+		let nd = 0;
+		const DISC = { orange: [1.7, 1.6], orangeLod: [1.7, 1.6], oak: [3.6, 4], jacaranda: [3.2, 5], eucalyptus: [3.4, 13], fanPalm: [1.9, 16], featherPalm: [2.6, 8], shrub: [1.3, 1] };
+		const sd = this.sunDir;
+		const el = Math.max(0.12, sd.y);
+		const hl = Math.hypot(sd.x, sd.z) || 1;
+		const shx = -sd.x / hl, shz = -sd.z / hl;
+		const lenK = Math.min(2.2, Math.sqrt(1 - el * el) / el);
 		for (const data of this.chunks.values()) {
 			for (const [type, arr] of Object.entries(data)) {
 				const pool = this.pools[type];
@@ -363,6 +380,16 @@ export class Scenery {
 					c.setHex(arr[o + 5]);
 					pool.mesh.setColorAt(n, c);
 					counts[type] = n + 1;
+					const D = DISC[type];
+					if (D && nd < this.discCap) {
+						const sc = arr[o + 4];
+						const off = Math.min(D[1] * sc * lenK * 0.55, 9);
+						p.set(arr[o] + shx * off, arr[o + 1] + 0.12, arr[o + 2] + shz * off);
+						q.identity();
+						s.set(D[0] * sc * (1 + lenK * 0.25), 1, D[0] * sc);
+						m.compose(p, q, s);
+						this.disc.setMatrixAt(nd++, m);
+					}
 					if ((type === "streetLight" || type === "lampPost") && g < 2000) {
 						const sc = arr[o + 4];
 						if (type === "streetLight") {
@@ -383,6 +410,8 @@ export class Scenery {
 			pool.mesh.instanceMatrix.needsUpdate = true;
 			if (pool.mesh.instanceColor) pool.mesh.instanceColor.needsUpdate = true;
 		}
+		this.disc.count = nd;
+		this.disc.instanceMatrix.needsUpdate = true;
 		this.glowGeo.setDrawRange(0, g);
 		this.glowGeo.attributes.position.needsUpdate = true;
 		this.counts = counts;
