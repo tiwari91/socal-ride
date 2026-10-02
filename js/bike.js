@@ -1,7 +1,7 @@
 // The motorcycle: an original classic touring cruiser (V-twin, spoked
 // whitewall wheels, leather saddlebags, windshield) and its rider.
 // Local frame: +z forward, +y up, +x to the rider's left. Origin = ground contact midpoint.
-import { clamp, lerp } from "./util.js";
+import { clamp, damp, lerp } from "./util.js";
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 export const PAINTS = {
@@ -49,11 +49,14 @@ export class Bike {
 			lens: new THREE.MeshBasicMaterial({ color: 0xfff4dc }),
 			tail: new THREE.MeshBasicMaterial({ color: 0x7a0b0b }),
 			amber: new THREE.MeshBasicMaterial({ color: 0xc87a12 }),
-			jacket: std({ color: 0x2b211d, metalness: 0.05, roughness: 0.5 }),
-			denim: std({ color: 0x2f4566, metalness: 0, roughness: 0.85 }),
-			boot: std({ color: 0x1f1610, metalness: 0, roughness: 0.6 }),
-			glove: std({ color: 0x1b1714, metalness: 0, roughness: 0.6 }),
-			helmet: std({ color: 0xece4d0, metalness: 0.1, roughness: 0.3 }),
+			jacket: std({ color: 0x31353c, metalness: 0.02, roughness: 0.78 }),
+			panel: std({ color: 0x24272d, metalness: 0.03, roughness: 0.7 }),
+			denim: std({ color: 0x33496c, metalness: 0, roughness: 0.88 }),
+			boot: std({ color: 0x18120d, metalness: 0.05, roughness: 0.5 }),
+			glove: std({ color: 0x17130f, metalness: 0.05, roughness: 0.55 }),
+			helmet: std({ color: 0xece4d0, metalness: 0.15, roughness: 0.18 }),
+			stripe: std({ color: 0xece4d0, metalness: 0.15, roughness: 0.2 }),
+			visor: std({ color: 0x141a22, metalness: 0.85, roughness: 0.06 }),
 			skin: std({ color: 0xc69274, metalness: 0, roughness: 0.7 }),
 			goggle: std({ color: 0x2a2f36, metalness: 0.6, roughness: 0.15 }),
 		};
@@ -87,6 +90,9 @@ export class Bike {
 		const P = PAINTS[key] || PAINTS.burgundy;
 		this.paintKey = key;
 		const main = new THREE.Color(P.main), trim = new THREE.Color(P.trim);
+		// the helmet is painted to match the bike, with a trim-colour stripe
+		this.m.helmet.color.copy(main);
+		this.m.stripe.color.copy(trim);
 		for (const { geo, trimFn } of this.paintParts) {
 			const p = geo.attributes.position, c = geo.attributes.color;
 			for (let i = 0; i < p.count; i++) {
@@ -365,62 +371,196 @@ export class Bike {
 		ws.rotateX(-0.32);
 		ws.translate(0, gy + 0.2, top.z - 0.08);
 		this.add(ws, m.glass, front).castShadow = false;
-		this.buildRider(gy, gz);
+		this.buildRider(gy, gz, front);
 	}
 
-	buildRider(gy, gz) {
+	// Articulated rider: lathe-turned limbs posed each frame with two-bone IK so
+	// the hands follow the bars, the torso hangs into turns, the head looks
+	// through the corner and the left boot goes down when the bike stops.
+	buildRider(gy, gz, front) {
 		const m = this.m;
 		const R = new THREE.Group();
 		this.rider = R;
 		this.body.add(R);
-		const hip = V(0, 0.98, -0.22);
-		const sh = V(0, 1.45, -0.12);
-		const add = (g, mat) => {
-			const mesh = new THREE.Mesh(g, mat);
-			R.add(mesh);
-			return mesh;
+		const mesh = (g, mat, parent = R) => {
+			const o = new THREE.Mesh(g, mat);
+			parent.add(o);
+			return o;
 		};
-		add(limb(hip, sh, 0.17).scale(1, 1, 0.82), m.jacket);
-		add(limb(V(-0.13, 0.95, -0.24), V(0.13, 0.95, -0.24), 0.13), m.denim);
-		// collar + neck + head
-		add(limb(V(0, 1.55, -0.11), V(0, 1.63, -0.1), 0.06), m.skin);
-		this.head = new THREE.Group();
-		this.head.position.set(0, 1.72, -0.09);
-		R.add(this.head);
-		const helm = new THREE.SphereGeometry(0.135, 24, 16, 0, Math.PI * 2, 0, Math.PI * 0.62);
-		this.head.add(new THREE.Mesh(helm, m.helmet));
-		const face = new THREE.SphereGeometry(0.105, 18, 12);
-		face.scale(0.95, 1.1, 1);
-		face.translate(0, -0.03, 0.02);
-		this.head.add(new THREE.Mesh(face, m.skin));
-		const gog = new THREE.TorusGeometry(0.11, 0.022, 8, 24, Math.PI * 1.2);
-		gog.rotateX(Math.PI / 2);
-		gog.rotateY(-Math.PI * 0.1 - Math.PI / 2 + Math.PI / 2);
-		gog.translate(0, 0.02, 0.0);
-		const gm = new THREE.Mesh(gog, m.goggle);
-		gm.rotation.y = -Math.PI * 0.6 + Math.PI;
-		this.head.add(gm);
-		const peak = new THREE.CylinderGeometry(0.11, 0.12, 0.012, 20, 1, false, -0.9, 1.8);
-		peak.translate(0, 0.06, 0.06);
-		this.head.add(new THREE.Mesh(peak, m.helmet));
-		// arms to the grips
+		// pelvis sits in the saddle
+		this.pelvis = new THREE.Group();
+		this.pelvis.position.set(0, 0.97, -0.22);
+		R.add(this.pelvis);
+		const seatG = new THREE.SphereGeometry(1, 24, 14);
+		seatG.scale(0.165, 0.11, 0.15);
+		mesh(seatG, m.denim, this.pelvis);
+		// torso: a turned jacket with chest depth, belt line and zip
+		this.torso = new THREE.Group();
+		this.torso.position.set(0, 0.02, 0.0);
+		this.pelvis.add(this.torso);
+		const prof = [[0, -0.03], [0.12, -0.025], [0.152, 0.03], [0.148, 0.12], [0.158, 0.22], [0.178, 0.32], [0.186, 0.39], [0.176, 0.44], [0.13, 0.49], [0.075, 0.52], [0.0, 0.53]];
+		const tg = new THREE.LatheGeometry(prof.map(([r, y]) => new THREE.Vector2(r, y)), 28);
+		tg.scale(1.06, 1, 0.74);
+		mesh(tg, m.jacket, this.torso);
+		const hem = new THREE.TorusGeometry(0.15, 0.018, 8, 28);
+		hem.rotateX(Math.PI / 2);
+		hem.scale(1.06, 1, 0.76);
+		hem.translate(0, 0.0, 0);
+		mesh(hem, m.leatherDark, this.torso);
+		const zip = new THREE.BoxGeometry(0.012, 0.42, 0.01);
+		zip.translate(0.02, 0.24, 0.118);
+		zip.rotateX(-0.03);
+		mesh(zip, m.satin, this.torso);
+		// back protector and shoulder armour under the leather
+		const back = new THREE.SphereGeometry(1, 18, 12, 0, Math.PI * 2, 0, Math.PI / 2);
+		back.rotateX(-Math.PI / 2);
+		back.scale(0.12, 0.17, 0.035);
+		back.translate(0, 0.28, -0.122);
+		mesh(back, m.panel, this.torso);
+		// reflective piping around the chest, like a touring jacket
+		const pipe = new THREE.TorusGeometry(0.168, 0.006, 6, 36);
+		pipe.rotateX(Math.PI / 2);
+		pipe.scale(1.07, 1, 0.76);
+		pipe.translate(0, 0.27, 0);
+		mesh(pipe, m.satin, this.torso);
+		this.shoulders = [];
 		for (const sx of [-1, 1]) {
-			const s0 = V(sx * 0.2, 1.4, -0.12);
-			const el = V(sx * 0.31, 1.18, 0.12);
-			const hand = V(sx * 0.41, gy + 0.02, gz + 0.0);
-			add(limb(s0, el, 0.058), m.jacket);
-			add(limb(el, hand, 0.048), m.jacket);
-			add(limb(hand, hand.clone().add(V(sx * 0.05, 0, 0)), 0.04), m.glove);
-			// legs: thigh forward, shin down to the footboard
-			const h = V(sx * 0.13, 0.95, -0.2);
-			const knee = V(sx * 0.21, 0.9, 0.24);
-			const foot = V(sx * 0.27, 0.36, 0.3);
-			add(limb(h, knee, 0.075), m.denim);
-			add(limb(knee, foot, 0.06), m.denim);
-			const boot = new THREE.CapsuleGeometry(0.05, 0.13, 4, 10);
-			boot.rotateX(Math.PI / 2);
-			boot.translate(foot.x, 0.36, foot.z + 0.05);
-			add(boot, m.boot);
+			const cap = new THREE.SphereGeometry(0.068, 16, 12);
+			cap.scale(1, 0.9, 1.05);
+			cap.translate(sx * 0.178, 0.43, -0.005);
+			mesh(cap, m.panel, this.torso);
+			const a = new THREE.Object3D();
+			a.position.set(sx * 0.185, 0.425, 0.0);
+			this.torso.add(a);
+			this.shoulders.push(a);
+		}
+		// neck and full-face helmet
+		this.neck = new THREE.Group();
+		this.neck.position.set(0, 0.5, 0.0);
+		this.torso.add(this.neck);
+		mesh(new THREE.CylinderGeometry(0.052, 0.06, 0.12, 14).translate(0, 0.05, 0.005), m.leatherDark, this.neck);
+		const collar = new THREE.CylinderGeometry(0.075, 0.09, 0.06, 18, 1, true);
+		collar.translate(0, 0.0, 0.0);
+		mesh(collar, Object.assign(m.jacket.clone(), { side: THREE.DoubleSide }), this.neck);
+		this.head = new THREE.Group();
+		this.head.position.set(0, 0.18, 0.03);
+		this.neck.add(this.head);
+		const shell = new THREE.SphereGeometry(0.145, 32, 22);
+		shell.scale(0.9, 1.0, 1.08);
+		mesh(shell, m.helmet, this.head);
+		const visor = new THREE.SphereGeometry(0.148, 28, 10, Math.PI / 2 - 1.0, 2.0, 0.98, 0.6);
+		visor.scale(0.91, 1.0, 1.09);
+		mesh(visor, m.visor, this.head);
+		// chin vent and the rubber visor seal
+		const vent = new THREE.BoxGeometry(0.05, 0.022, 0.02);
+		vent.translate(0, -0.095, 0.148);
+		mesh(vent, m.black, this.head);
+		const seal = new THREE.TorusGeometry(0.143, 0.006, 6, 30, 2.0);
+		seal.rotateX(Math.PI / 2);
+		seal.rotateY(Math.PI / 2 - 1.0);
+		seal.scale(0.91, 1, 1.09);
+		seal.translate(0, -0.046, 0);
+		mesh(seal, m.black, this.head);
+		const stripe = new THREE.SphereGeometry(0.1465, 24, 16, Math.PI * 1.5 - 0.09, 0.18, 0.05, 2.0);
+		stripe.scale(0.9, 1.0, 1.08);
+		mesh(stripe, m.stripe, this.head);
+		// limbs: unit-oriented segments along +y, posed every frame
+		const seg = (L, r0, r1, bulge, mat) => mesh(limbLathe(L, r0, r1, bulge), mat);
+		this.arms = [];
+		this.legs = [];
+		const grip = (sx) => {
+			const o = new THREE.Object3D();
+			o.position.set(sx * 0.405, gy + 0.012, gz + 0.004);
+			front.add(o);
+			return o;
+		};
+		for (const sx of [-1, 1]) {
+			const arm = {
+				sx, grip: grip(sx), l1: 0.29, l2: 0.27,
+				up: seg(0.29, 0.064, 0.052, 0.12, m.jacket),
+				lo: seg(0.27, 0.053, 0.042, 0.1, m.jacket),
+				cuff: mesh(new THREE.CylinderGeometry(0.043, 0.04, 0.05, 12).translate(0, 0.27, 0), m.glove),
+				hand: mesh(handGeo(), m.glove),
+			};
+			arm.cuff.matrixAutoUpdate = true;
+			this.arms.push(arm);
+			const leg = {
+				sx, l1: 0.45, l2: 0.43,
+				hip: new THREE.Vector3(sx * 0.105, 0.95, -0.2),
+				board: new THREE.Vector3(sx * 0.27, 0.405, 0.27),
+				ground: new THREE.Vector3(sx * 0.4, 0.085, 0.05),
+				up: seg(0.45, 0.082, 0.062, 0.08, m.denim),
+				lo: seg(0.43, 0.06, 0.05, 0.06, m.denim),
+				boot: mesh(bootGeo(sx), m.boot),
+			};
+			this.legs.push(leg);
+		}
+		this.pose = { foot: 0, yaw: 0, t: 0 };
+		this._d = new THREE.Vector3();
+		this._v = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
+	}
+
+	// Two-bone IK: from joint a towards target t, bending towards pole.
+	solve(a, t, l1, l2, pole, mid, end) {
+		const d = this._d.subVectors(t, a);
+		const L = clamp(d.length(), Math.abs(l1 - l2) + 0.01, l1 + l2 - 0.002);
+		d.normalize();
+		const x = (l1 * l1 - l2 * l2 + L * L) / (2 * L);
+		const h = Math.sqrt(Math.max(0, l1 * l1 - x * x));
+		mid.subVectors(pole, a);
+		mid.addScaledVector(d, -mid.dot(d)).normalize();
+		mid.multiplyScalar(h).addScaledVector(d, x).add(a);
+		end.copy(a).addScaledVector(d, L);
+	}
+
+	place(meshObj, a, b) {
+		meshObj.position.copy(a);
+		const dir = this._v[4].subVectors(b, a).normalize();
+		meshObj.quaternion.setFromUnitVectors(UP, dir);
+	}
+
+	updateRider(dt, speed, lean, steer) {
+		const P = this.pose;
+		P.t += dt;
+		const [a, mid, end, tmp] = this._v;
+		P.foot = damp(P.foot, speed < 0.7 ? 1 : 0, speed < 0.7 ? 3.2 : 6, dt);
+		const tuck = clamp(speed / 30, 0, 1);
+		// cruiser posture: upright, a little forward into the wind at speed, hang into turns
+		this.torso.rotation.set(0.05 + 0.07 * tuck + Math.sin(P.t * 1.7) * 0.004, 0, lean * 0.14);
+		this.torso.scale.set(1, 1, 1 + Math.sin(P.t * 1.6) * 0.012);
+		// look through the corner; keep the eyes nearer level than the bike
+		const glance = Math.sin(P.t * 0.23) * 0.35 * clamp(1 - speed / 12, 0, 1);
+		P.yaw = damp(P.yaw, clamp(-lean * 0.9 - steer * 0.5, -0.6, 0.6) + glance, 4, dt);
+		this.neck.rotation.set(-0.06 - 0.05 * tuck, P.yaw * 0.4, -lean * 0.3);
+		this.head.rotation.set(-0.03 * tuck, P.yaw * 0.6, -lean * 0.25);
+		this.rider.updateMatrixWorld(true);
+		// arms reach the grips (which move with the steering)
+		for (const arm of this.arms) {
+			this.shoulders[arm.sx > 0 ? 1 : 0].getWorldPosition(a);
+			this.rider.worldToLocal(a);
+			arm.grip.getWorldPosition(tmp);
+			this.rider.worldToLocal(tmp);
+			const pole = this._pole || (this._pole = new THREE.Vector3());
+			pole.set(arm.sx * 0.75, a.y - 0.55, a.z - 0.35);
+			this.solve(a, tmp, arm.l1, arm.l2, pole, mid, end);
+			this.place(arm.up, a, mid);
+			this.place(arm.lo, mid, end);
+			arm.cuff.position.copy(mid);
+			arm.cuff.quaternion.copy(arm.lo.quaternion);
+			arm.hand.position.copy(end);
+			arm.hand.quaternion.copy(arm.lo.quaternion);
+		}
+		// legs: boots on the footboards, left boot down at a stop
+		for (const leg of this.legs) {
+			const down = leg.sx > 0 ? P.foot : 0;
+			tmp.lerpVectors(leg.board, leg.ground, down);
+			const pole = this._lp || (this._lp = new THREE.Vector3());
+			pole.set(leg.sx * (0.42 + down * 0.15), 1.25, 1.0);
+			this.solve(leg.hip, tmp, leg.l1, leg.l2, pole, mid, end);
+			this.place(leg.up, leg.hip, mid);
+			this.place(leg.lo, mid, end);
+			leg.boot.position.copy(end);
+			leg.boot.rotation.set(0, leg.sx * 0.12, 0);
 		}
 	}
 
@@ -432,20 +572,67 @@ export class Bike {
 
 	update(dt, speed, lean, steer, bump, rpm) {
 		const st = this.state;
+		st.t = (st.t || 0) + dt;
 		st.spin += (speed / 0.33) * dt;
 		this.frontWheel.rotation.x = st.spin;
 		this.rearWheel.rotation.x = st.spin * (0.335 / 0.325);
-		this.lean.rotation.z = lean;
+		// a touch of lean onto the side stand foot when stopped
+		this.lean.rotation.z = lean - 0.055 * (this.pose ? this.pose.foot : 0);
 		this.steer.rotation.y = lerp(this.steer.rotation.y, steer, 1 - Math.exp(-dt * 8));
 		// suspension: small bobbing with speed and road bumps, engine shake at idle
-		const t = performance.now() / 1000;
+		const t = st.t;
 		const shake = Math.sin(t * rpm * 0.105) * 0.0012 * clamp(1 - speed / 8, 0.15, 1);
 		st.bob = lerp(st.bob, bump, 1 - Math.exp(-dt * 6));
 		this.body.position.y = st.bob + shake;
 		this.body.rotation.x = st.pitch;
-		this.rider.position.y = Math.sin(t * 2.1) * 0.004;
-		this.head.rotation.y = Math.sin(t * 0.23) * 0.25 * clamp(1 - speed / 30, 0.2, 1);
+		this.rider.position.y = Math.sin(t * 2.1) * 0.003 + st.bob * 0.4;
+		this.updateRider(dt, speed, lean, this.steer.rotation.y);
 	}
+}
+
+const UP = new THREE.Vector3(0, 1, 0);
+
+// Limb segment from y=0 to y=L with rounded ends, tapering r0 -> r1 with a soft muscle bulge.
+function limbLathe(L, r0, r1, bulge) {
+	const pts = [];
+	for (let k = 0; k <= 4; k++) {
+		const a = -Math.PI / 2 + (k / 4) * (Math.PI / 2);
+		pts.push(new THREE.Vector2(Math.max(1e-4, r0 * Math.cos(a)), r0 * Math.sin(a)));
+	}
+	for (let k = 1; k < 8; k++) {
+		const t = k / 8;
+		pts.push(new THREE.Vector2(lerp(r0, r1, t) * (1 + bulge * Math.sin(Math.PI * Math.pow(t, 0.8))), t * L));
+	}
+	for (let k = 0; k <= 4; k++) {
+		const a = (k / 4) * (Math.PI / 2);
+		pts.push(new THREE.Vector2(Math.max(1e-4, r1 * Math.cos(a)), L + r1 * Math.sin(a)));
+	}
+	return new THREE.LatheGeometry(pts, 14);
+}
+
+// Gloved fist wrapped around the grip, built along +y (forearm direction).
+function handGeo() {
+	const fist = new THREE.SphereGeometry(1, 14, 10);
+	fist.scale(0.045, 0.06, 0.04);
+	fist.translate(0, 0.035, 0);
+	const thumb = new THREE.CapsuleGeometry(0.014, 0.04, 4, 8);
+	thumb.rotateZ(0.5);
+	thumb.translate(0.02, 0.05, 0.03);
+	return mergeGeos([fist, thumb]);
+}
+
+// Riding boot: shaft plus toe box pointing forward (+z).
+function bootGeo(sx) {
+	const shaft = new THREE.CylinderGeometry(0.052, 0.05, 0.16, 14);
+	shaft.translate(0, 0.02, -0.01);
+	const foot = new THREE.CapsuleGeometry(0.045, 0.16, 4, 12);
+	foot.rotateX(Math.PI / 2);
+	foot.scale(1.05, 0.85, 1);
+	foot.translate(0, -0.055, 0.07);
+	const heel = new THREE.BoxGeometry(0.08, 0.03, 0.06);
+	heel.translate(0, -0.09, -0.03);
+	void sx;
+	return mergeGeos([shaft, foot, heel]);
 }
 
 function limbCyl(a, b, r) {

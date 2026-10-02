@@ -180,7 +180,7 @@ export class Route {
 	// between our lanes and the opposing lanes, med = raised landscaped median.
 	computeLayout() {
 		const n = this.n;
-		const R = new Float32Array(n), Lp = new Float32Array(n), gap = new Float32Array(n), med = new Float32Array(n);
+		const R = new Float32Array(n), Lp = new Float32Array(n), gap = new Float32Array(n), med = new Float32Array(n), bike = new Float32Array(n);
 		const blend = new Float32Array(n);
 		for (let i = 0; i < n; i++) {
 			const hw = this.hw[i], k = this.kind[i];
@@ -193,6 +193,11 @@ export class Route {
 				const wide = this.lanes[i] >= 3 && (zone === "irvine" || zone === "oc-city" || zone === "coast");
 				m = wide ? 1 : 0;
 				r = k === KIND.coast ? 1.9 : 1.3;
+				// Class II bike lanes on PCH and Irvine's arterials
+				if (k === KIND.coast || (zone === "irvine" && this.lanes[i] >= 2)) {
+					bike[i] = 1.6;
+					r = 2.3;
+				}
 				g = wide ? 5.2 : 0.4;
 				opp = 2 * hw;
 				lpad = r;
@@ -207,6 +212,7 @@ export class Route {
 		this.Lp = smoothArray(Lp, 8);
 		this.gap = smoothArray(gap, 6);
 		this.med = med;
+		this.bike = bike;
 		this.blend = smoothArray(blend, 25);
 	}
 

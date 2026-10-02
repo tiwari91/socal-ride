@@ -108,11 +108,14 @@ export const fogUniforms = {
 	fogSunView: { value: null },
 	fogSunColor: { value: null },
 	uTime: { value: 0 },
+	// Lambert materials do not get three's cameraPosition uniform, so pass our own
+	uCam: { value: null },
 };
 
 export function installFogChunks() {
 	fogUniforms.fogSunView.value = new THREE.Vector3(0, 0, -1);
 	fogUniforms.fogSunColor.value = new THREE.Color(1, 0.8, 0.6);
+	fogUniforms.uCam.value = new THREE.Vector3();
 	const C = THREE.ShaderChunk;
 	C.fog_pars_vertex = "#ifdef USE_FOG\n varying float vFogDepth;\n varying vec3 vFogView;\n#endif";
 	C.fog_vertex = "#ifdef USE_FOG\n vFogDepth = - mvPosition.z;\n vFogView = mvPosition.xyz;\n#endif";
@@ -153,6 +156,7 @@ export function withFog(mat, edit, key = "fog") {
 		shader.uniforms.fogSunView = fogUniforms.fogSunView;
 		shader.uniforms.fogSunColor = fogUniforms.fogSunColor;
 		shader.uniforms.uTime = fogUniforms.uTime;
+		shader.uniforms.uCam = fogUniforms.uCam;
 		if (prev && prev !== THREE.Material.prototype.onBeforeCompile) prev(shader, r);
 		if (edit) edit(shader);
 	};

@@ -25,6 +25,9 @@
 			</div>
 		</div>
 		<nav class="icons">
+			<button class="ic" id="btn-map" aria-label="Explore the map" title="Explore the map (G)">
+				<svg viewBox="0 0 24 24"><path d="M3.5 6.5l5.5-2 6 2 5.5-2v13l-5.5 2-6-2-5.5 2z"/><path d="M9 4.5v13M15 6.5v13"/></svg>
+			</button>
 			<button class="ic" id="btn-chapters" aria-label="Chapters" title="Chapters">
 				<svg viewBox="0 0 24 24"><path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0C18.5 15.4 12 21 12 21z"/><circle cx="12" cy="10" r="2.4"/></svg>
 			</button>
@@ -49,7 +52,7 @@
 	<div id="toast" class="toast" aria-live="polite"></div>
 
 	<div class="bottom">
-		<div class="map panel" id="map-wrap"><canvas id="minimap" width="300" height="300" aria-label="Route map"></canvas><div class="map-meta" id="map-meta">0 mi</div></div>
+		<button class="map panel" id="map-wrap" aria-label="Open the explore map" title="Explore the map (G)"><canvas id="minimap" width="300" height="300" aria-hidden="true"></canvas><span class="map-meta" id="map-meta">0 mi</span><span class="map-open"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7"/></svg>Explore</span></button>
 		<div class="center">
 			<div class="seg" role="tablist" aria-label="Mode">
 				<button id="mode-cruise" class="active" role="tab" aria-selected="true">Cruise</button>
@@ -73,7 +76,7 @@
 		<div class="pad left"><button id="t-left" aria-label="Steer left">&#9664;</button><button id="t-right" aria-label="Steer right">&#9654;</button></div>
 		<div class="pad right"><button id="t-brake" aria-label="Brake">Brake</button><button id="t-gas" aria-label="Throttle">Throttle</button></div>
 	</div>
-	<div class="hint" id="hint">Arrows or WASD to ride &middot; C camera &middot; M mode</div>
+	<div class="hint" id="hint">Arrows or WASD to ride &middot; C camera &middot; M mode &middot; G map</div>
 </div>
 
 <aside id="chapters" class="sheet" hidden>
@@ -98,8 +101,52 @@
 		<div class="seg small" id="quality"><button data-v="low">Low</button><button data-v="medium">Medium</button><button data-v="high">High</button></div>
 	</div>
 	<p class="note" id="quality-note">Quality changes reload the ride.</p>
-	<p class="credits">Map data &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a> (ODbL). Elevation: NOAA ETOPO1. Three.js. <a href="https://github.com/tiwari91/socal-ride" target="_blank" rel="noopener">Source</a></p>
+	<details class="keys">
+		<summary>Keyboard shortcuts</summary>
+		<dl>
+			<dt>Up / W</dt><dd>Throttle (takes the bars in Cruise)</dd>
+			<dt>Down / S / Space</dt><dd>Brake</dd>
+			<dt>Left, Right / A, D</dt><dd>Steer</dd>
+			<dt>G</dt><dd>Explore map and places</dd>
+			<dt>C</dt><dd>Next camera</dd>
+			<dt>M</dt><dd>Cruise or Ride</dd>
+			<dt>1 to 7</dt><dd>Jump to a chapter</dd>
+			<dt>H / P</dt><dd>Hide HUD / pause</dd>
+			<dt>?</dt><dd>These settings</dd>
+			<dt>Esc</dt><dd>Close panels</dd>
+		</dl>
+	</details>
+	<p class="credits">Map, roads and places &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a> (ODbL). Map view: Leaflet. Elevation: NOAA ETOPO1. Three.js. <a href="https://github.com/tiwari91/socal-ride" target="_blank" rel="noopener">Source</a></p>
 </aside>
+
+<section id="explore" class="explore" hidden aria-label="Explore map">
+	<div id="ex-map" class="ex-map" aria-label="Map of the route and nearby places"></div>
+	<header class="ex-top">
+		<label class="ex-search">
+			<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4.3-4.3"/></svg>
+			<input id="ex-search" type="search" placeholder="Search places" aria-label="Search places" autocomplete="off" enterkeyhint="search">
+		</label>
+		<button class="ic active" id="ex-follow" aria-pressed="true" aria-label="Follow the rider" title="Follow the rider">
+			<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3"/><circle cx="12" cy="12" r="7"/></svg>
+		</button>
+		<button class="ic" id="ex-close" aria-label="Close the map" title="Close (Esc)">
+			<svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>
+		</button>
+	</header>
+	<aside class="ex-side" id="ex-side">
+		<button class="ex-grip" id="ex-sheet-toggle" aria-label="Show or hide the list of places"><i></i></button>
+		<h2>Places along the ride</h2>
+		<div class="ex-cats" id="ex-cats" aria-label="Categories"></div>
+		<div class="ex-tools">
+			<label class="ex-check"><input type="checkbox" id="ex-labels"> Label nearby places in 3D</label>
+			<button id="ex-live" class="ex-live" title="Fetch the latest places in this view from OpenStreetMap">Refresh area</button>
+		</div>
+		<div class="ex-count" id="ex-count" aria-live="polite"></div>
+		<ul class="ex-list" id="ex-list"></ul>
+		<p class="ex-credit">Places and map &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a>, ODbL. Tap a place for hours and links; Ride here jumps the bike to it.</p>
+	</aside>
+	<div class="ex-status" id="ex-status" aria-live="polite"></div>
+</section>
 
 <div id="finale" class="finale" hidden>
 	<div class="finale-in panel">
@@ -114,7 +161,7 @@
 	<div class="loader-in">
 		<img src="assets/logo.svg" alt="" width="72" height="72">
 		<h1>Citrus to Surf</h1>
-		<p class="tag">A slow ride across Southern California, from the orange groves of Redlands to the Laguna Beach sunset.</p>
+		<p class="tag">A slow ride across Southern California, from the orange groves of Redlands to the Laguna Beach sunset. Open the map any time to find cafes, beaches and viewpoints along the way.</p>
 		<div class="bar"><i id="load-bar"></i></div>
 		<div id="load-msg" class="load-msg">Loading</div>
 		<button id="start" class="primary" disabled>Start the ride</button>

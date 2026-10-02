@@ -159,6 +159,64 @@ try {
 	});
 	ok("Theme toggles", th[0] !== th[1], th.join(" -> "));
 
+	// rider: left boot goes down when the bike stops
+	const foot = await page.evaluate(async () => {
+		app.setMode("ride");
+		app.rider.v = 0;
+		await new Promise((r) => setTimeout(r, 1600));
+		const f = app.bike.pose.foot, y = app.bike.legs[1].boot.position.y;
+		app.setMode("cruise");
+		return { f, y };
+	});
+	ok("Rider puts a foot down at a stop", foot.f > 0.8 && foot.y < 0.2, `foot ${foot.f.toFixed(2)}, boot y ${foot.y.toFixed(2)} m`);
+
+	// places snapshot and floating labels
+	await page.waitForFunction(() => app.places && app.places.ready, null, { timeout: 30000 });
+	const pl = await page.evaluate(() => ({ n: app.places.list.length, c: app.places.counts(), labels: app.places.pool.filter((L) => L.place).length }));
+	ok("Places snapshot loads (OSM cafes, food, viewpoints...)", pl.n > 500 && pl.c.cafe > 20 && pl.c.view > 5, `${pl.n} places, ${pl.c.cafe} cafes, ${pl.c.view} viewpoints, ${pl.labels} 3D labels`);
+
+	// explore map: open with G, markers, search, popup, category toggle, ride here, Esc
+	await page.keyboard.press("KeyG");
+	await page.waitForSelector(".ex-pin, .ex-cluster", { timeout: 30000 });
+	const ex0 = await page.evaluate(() => ({ open: app.explore.open, pins: document.querySelectorAll(".ex-pin, .ex-cluster").length, rider: !!document.querySelector(".ex-rider"), tiles: document.querySelectorAll(".leaflet-tile").length, attr: document.querySelector(".leaflet-control-attribution").textContent }));
+	ok("Explore map opens with route, rider and places", ex0.open && ex0.pins > 5 && ex0.rider && ex0.tiles > 0 && /OpenStreetMap/.test(ex0.attr), `${ex0.pins} markers, ${ex0.tiles} tiles`);
+	const dBefore = await page.evaluate(() => app.rider.d);
+	await page.locator("#ex-map").focus();
+	await page.keyboard.down("ArrowLeft");
+	await wait(page, 700);
+	await page.keyboard.up("ArrowLeft");
+	const dAfter = await page.evaluate(() => app.rider.d);
+	ok("Arrow keys pan the map instead of steering", Math.abs(dAfter - dBefore) < 0.3, `d ${dBefore.toFixed(2)} -> ${dAfter.toFixed(2)}`);
+	await page.fill("#ex-search", "beach");
+	await wait(page, 500);
+	const found = await page.evaluate(() => document.querySelectorAll("#ex-list li").length);
+	await page.click("#ex-list li button");
+	await page.waitForSelector(".leaflet-popup .pp-go", { timeout: 15000 });
+	const pop = await page.evaluate(() => document.querySelector(".leaflet-popup .pp-name").textContent);
+	ok("Search lists matches and opens a popup", found > 0 && pop.length > 0, `${found} matches, popup "${pop}"`);
+	await shot(page, "13-explore-map");
+	await page.fill("#ex-search", "");
+	await page.click(".ex-cats .cat >> nth=0");
+	const off = await page.evaluate(() => !app.places.enabled.has("cafe"));
+	await page.click(".ex-cats .cat >> nth=0");
+	const on = await page.evaluate(() => app.places.enabled.has("cafe"));
+	ok("Category toggles switch on and off", off && on, "cafes");
+	await page.fill("#ex-search", "Crystal Cove");
+	await wait(page, 400);
+	await page.click("#ex-list li button");
+	await page.waitForSelector(".leaflet-popup .pp-go", { timeout: 15000 });
+	await wait(page, 400);
+	const target = await page.evaluate(() => parseFloat(document.querySelector(".leaflet-popup .pp-go").dataset.s));
+	await page.click(".leaflet-popup .pp-go");
+	await page.waitForFunction(() => !app.explore.open && !app.paused, null, { timeout: 60000 });
+	const sNow = await page.evaluate(() => app.rider.s);
+	ok("Ride here jumps the bike to the place", Math.abs(sNow - target) < 400, `target ${(target / 1000).toFixed(1)} km, now ${(sNow / 1000).toFixed(1)} km`);
+	await page.keyboard.press("KeyG");
+	await wait(page, 600);
+	await page.keyboard.press("Escape");
+	await wait(page, 300);
+	ok("Escape closes the map", await page.evaluate(() => !app.explore.open && !document.body.classList.contains("exploring")));
+
 	// screenshots of each chapter and the sunset coast
 	if (process.env.SHOTS !== "0") {
 		const chapters = await page.evaluate(() => app.route.chapters.map((c) => c.s));
@@ -224,6 +282,14 @@ try {
 		const t1 = await P.page.evaluate(() => app.rider.s);
 		ok(`Phone ${name}: touch controls visible and drive`, vis === "flex" && t1 > t0 + 5, `display ${vis}, moved ${(t1 - t0).toFixed(0)} m`);
 		await shot(P.page, `12-${name}-ride`);
+		// tap the minimap to explore
+		await P.page.tap("#map-wrap");
+		await P.page.waitForSelector(".ex-pin, .ex-cluster", { timeout: 30000 });
+		await wait(P.page, 800);
+		const ex = await P.page.evaluate(() => ({ open: app.explore.open, sw: document.documentElement.scrollWidth, iw: innerWidth, sheet: document.getElementById("ex-side").getBoundingClientRect().height }));
+		ok(`Phone ${name}: minimap opens the explore map`, ex.open && ex.sw <= ex.iw && ex.sheet > 100, `sheet ${Math.round(ex.sheet)} px, ${ex.sw}/${ex.iw}`);
+		await shot(P.page, `14-${name}-explore`);
+		await P.page.tap("#ex-close");
 		ok(`No console errors (${name})`, P.errors.length === 0, P.errors.slice(0, 3).join(" | "));
 		await P.ctx.close();
 	}

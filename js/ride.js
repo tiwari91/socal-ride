@@ -154,6 +154,11 @@ export class Input {
 		this.onKey = null;
 		window.addEventListener("keydown", (e) => {
 			if (e.target && (e.target.tagName === "INPUT" || e.target.tagName === "SELECT")) return;
+			// while the explore map is open, keys pan the map instead of riding
+			if (document.body.classList.contains("exploring")) {
+				if (this.onKey && (e.code === "Escape" || e.code === "KeyG")) this.onKey(e);
+				return;
+			}
 			this.keys.add(e.code);
 			if (this.onKey) this.onKey(e);
 			if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Space"].includes(e.code)) e.preventDefault();

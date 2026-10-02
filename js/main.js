@@ -20,6 +20,8 @@ import { buildLandmarks } from "./landmarks.js";
 import { Traffic } from "./traffic.js";
 import { Audio } from "./audio.js";
 import { UI } from "./ui.js";
+import { Places } from "./places.js";
+import { Explore } from "./explore.js";
 import { coastDistance } from "./world.js";
 
 const savedTheme = store.get("theme", null);
@@ -128,6 +130,11 @@ async function start() {
 	app.traffic = traffic;
 	const audio = new Audio();
 	app.audio = audio;
+	// cafes, beaches and stops along the way (OSM snapshot), loaded in the background
+	const places = new Places(app);
+	app.places = places;
+	scene.add(places.group);
+	places.load();
 
 	// rider and machine
 	const bike = new Bike(null, store.get("paint", "burgundy"));
@@ -202,6 +209,8 @@ async function start() {
 	};
 	const ui = new UI(app);
 	app.ui = ui;
+	const explore = new Explore(app);
+	app.explore = explore;
 	if (params.get("mode") === "ride") ui.setMode("ride");
 	const startBtn = document.getElementById("start");
 	startBtn.disabled = false;
@@ -288,7 +297,10 @@ async function start() {
 			birds: (zone === "redlands" || zone === "riverside" || zone === "irvine" || zone === "ie-freeway") && hour < 15 ? 1 : 0,
 		});
 		ui.update(dt);
+		places.update(dt);
+		explore.update(dt);
 		fogUniforms.uTime.value = app.t;
+		fogUniforms.uCam.value.copy(camera.position);
 		// streaming work is spread over frames
 		const phase = app.frames % 4;
 		if (phase === 0) roads.update(rider.s);

@@ -159,6 +159,23 @@ export class UI {
 	bind() {
 		const app = this.app;
 		$("btn-chapters").addEventListener("click", () => this.open("chapters"));
+		$("btn-map").addEventListener("click", () => app.explore.toggle());
+		$("map-wrap").addEventListener("click", () => app.explore.show());
+		// clicking a floating place label in 3D opens it on the map
+		const cv = $("scene");
+		let down = null;
+		cv.addEventListener("pointerdown", (e) => (down = [e.clientX, e.clientY]));
+		cv.addEventListener("pointerup", (e) => {
+			if (!down || Math.hypot(e.clientX - down[0], e.clientY - down[1]) > 6 || !app.places) return;
+			const p = app.places.pick(e.clientX, e.clientY);
+			if (p) app.explore.show(p);
+		});
+		cv.addEventListener("pointermove", (e) => {
+			if (e.pointerType !== "mouse" || !app.places) return;
+			this._hoverT = (this._hoverT || 0) + 1;
+			if (this._hoverT % 3) return;
+			cv.style.cursor = app.places.pick(e.clientX, e.clientY) ? "pointer" : "";
+		});
 		$("btn-settings").addEventListener("click", () => this.open("settings"));
 		document.querySelectorAll("[data-close]").forEach((b) => b.addEventListener("click", () => this.close()));
 		$("btn-theme").addEventListener("click", () => {
@@ -209,7 +226,15 @@ export class UI {
 		inp.bindTouch($("t-gas"), "throttle", 1);
 		inp.bindTouch($("t-brake"), "brake", 1);
 		inp.onKey = (e) => {
-			if (e.code === "KeyC") {
+			if (e.code === "KeyG") {
+				this.close();
+				app.explore.toggle();
+			} else if (e.code === "Escape" && app.explore.open) app.explore.hide();
+			else if (e.key === "?") {
+				this.open("settings");
+				const k = document.querySelector("#settings .keys");
+				if (k && !$("settings").hidden) k.open = true;
+			} else if (e.code === "KeyC") {
 				app.rig.auto = false;
 				app.rig.next();
 			} else if (e.code === "KeyM") this.setMode(app.rider.mode === "cruise" ? "ride" : "cruise");

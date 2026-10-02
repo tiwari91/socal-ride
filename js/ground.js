@@ -314,14 +314,14 @@ export function groundDetail(shader) {
 		.replace("#include <common>", "#include <common>\nvarying vec3 vWpos;")
 		.replace("#include <worldpos_vertex>", "#include <worldpos_vertex>\nvWpos = (modelMatrix * vec4(transformed, 1.0)).xyz;");
 	shader.fragmentShader = shader.fragmentShader
-		.replace("#include <common>", "#include <common>\nvarying vec3 vWpos;\n" + NOISE_GLSL)
+		.replace("#include <common>", "#include <common>\nvarying vec3 vWpos;\nuniform vec3 uCam;\n" + NOISE_GLSL)
 		.replace(
 			"#include <color_fragment>",
 			`#include <color_fragment>
 			{
 				vec2 p = vWpos.xz;
 				float n = vnoise(p * 0.11) * 0.5 + vnoise(p * 0.43) * 0.3 + vnoise(p * 1.7) * 0.2;
-				float far = smoothstep(150.0, 900.0, length(vWpos - cameraPosition));
+				float far = smoothstep(150.0, 900.0, length(vWpos - uCam));
 				diffuseColor.rgb *= mix(0.86 + n * 0.28, 1.0, far * 0.6);
 			}`
 		);

@@ -18,43 +18,120 @@ float dash(float v, float on, float period) {
 	float aa = max(fwidth(v), 0.01);
 	return smoothstep(0.0, aa, f) * (1.0 - smoothstep(on - aa, on, f));
 }
+// Bicycle stencil (two wheels, frame and rider) painted in a bike lane, local coords in metres.
+float bikeGlyph(vec2 p) {
+	float w = 0.07;
+	float g = 0.0;
+	g = max(g, 1.0 - smoothstep(w * 0.5, w * 0.5 + 0.02, abs(length(p - vec2(0.0, -0.55)) - 0.32)));
+	g = max(g, 1.0 - smoothstep(w * 0.5, w * 0.5 + 0.02, abs(length(p - vec2(0.0, 0.55)) - 0.32)));
+	// frame: seat tube, top tube, down tube as distance to segments
+	vec2 A = vec2(0.0, -0.55), Bp = vec2(0.0, 0.0), C = vec2(0.0, 0.55), D = vec2(0.0, 0.35);
+	vec2 pa = p - A, ba = C - A;
+	float h = clamp(dot(pa, ba) / dot(ba, ba), 0.0, 1.0);
+	g = max(g, 1.0 - smoothstep(w * 0.5, w * 0.5 + 0.02, length(pa - ba * h)));
+	// rider: head and back
+	g = max(g, 1.0 - smoothstep(0.1, 0.12, length(p - vec2(0.0, 0.25))));
+	vec2 pb = p - Bp, bb = D - Bp;
+	h = clamp(dot(pb, bb) / dot(bb, bb), 0.0, 1.0);
+	g = max(g, 1.0 - smoothstep(0.05, 0.07, length(pb - bb * h)));
+	return g;
+}
 vec3 roadColor(vec4 r1, vec4 r2, vec3 wpos) {
 	float u = r1.x, v = r1.y, hw = r1.z, kind = r1.w;
-	float gap = r2.x, R = r2.y, Lp = r2.z;
+	float gap = r2.x, R = r2.y, Lp = r2.z, bikeW = r2.w;
 	bool fwy = kind < 0.5;
 	bool ramp = kind > 0.5 && kind < 1.5;
 	bool street = kind > 2.5 && kind < 3.5;
-	float n = vnoise(vec2(u * 0.9, v * 0.25)) * 0.6 + vnoise(vec2(u * 6.0, v * 3.0)) * 0.4;
-	vec3 asphalt = vec3(0.30, 0.30, 0.315) * (0.86 + n * 0.25);
-	vec3 conc = vec3(0.60, 0.585, 0.55) * (0.9 + n * 0.16);
-	vec3 col = fwy ? conc : asphalt;
-	// patched / older asphalt bands
-	if (!fwy) col *= 0.93 + 0.12 * vnoise(vec2(v * 0.02, u * 0.05));
-	float dist = length(wpos - cameraPosition);
+	float dist = length(wpos - uCam);
 	float fade = 1.0 - smoothstep(120.0, 600.0, dist);
+	float nearF = 1.0 - smoothstep(8.0, 45.0, dist);
+	float n = vnoise(vec2(u * 0.9, v * 0.25)) * 0.6 + vnoise(vec2(u * 6.0, v * 3.0)) * 0.4;
+	// asphalt: dark binder with lighter aggregate, sun-faded in large blotches
+	float agg = vnoise(vLoc * vec2(31.0, 29.0)) * 0.6 + vnoise(vLoc * vec2(83.0, 79.0) + 7.0) * 0.4;
+	float stones = smoothstep(0.62, 0.8, agg);
+	float age = vnoise(wpos.xz * 0.035) * 0.6 + vnoise(wpos.xz * 0.15) * 0.4;
+	vec3 asphalt = mix(vec3(0.24, 0.24, 0.25), vec3(0.37, 0.36, 0.35), age) * (0.88 + n * 0.22);
+	asphalt *= 1.0 + (stones * 0.1 - (1.0 - agg) * 0.06) * nearF;
+	asphalt *= 0.93 + 0.14 * vnoise(wpos.xz * 1.3) * (0.4 + 0.6 * fade);
+	// Caltrans portland-cement concrete: pale, with longitudinal tining
+	vec3 conc = vec3(0.62, 0.6, 0.56) * (0.9 + n * 0.16);
+	conc *= 1.0 - 0.035 * step(0.5, fract(u * 26.0)) * nearF;
+	conc *= 1.0 + (agg - 0.5) * 0.1 * nearF;
 	float lanes = max(1.0, floor(2.0 * hw / 3.6 + 0.5));
 	float lw = 2.0 * hw / lanes;
-	// wheel-track wear inside each of our lanes
 	float k = (u + hw) / lw;
+	// freeway lanes are concrete, shoulders asphalt
+	bool onSlab = fwy && u > -hw - 0.05 && u < hw + 0.05;
+	bool onOppSlab = fwy && u < -hw - gap + 0.05 && u > -hw - gap - 2.0 * hw - 0.05;
+	vec3 col = (onSlab || onOppSlab) ? conc : asphalt;
+	// patched / older asphalt bands and utility-cut patches
+	if (!(onSlab || onOppSlab)) {
+		col *= 0.93 + 0.12 * vnoise(vec2(v * 0.02, u * 0.05));
+		float cell = floor(v / 37.0);
+		float ph = vhash(vec2(cell, floor(u / 3.6) + 17.0));
+		vec2 pc = vec2(fract(v / 37.0) * 37.0 - 18.5, fract(u / 3.6) * 3.6 - 1.8);
+		vec2 sz = vec2(2.0 + 6.0 * vhash(vec2(cell, 3.0)), 0.6 + 0.9 * vhash(vec2(cell, 5.0)));
+		float edge = vnoise(vec2(v * 1.7, u * 1.7)) * 0.35;
+		if (ph > 0.84 && abs(pc.x) < sz.x - edge && abs(pc.y) < sz.y - edge * 0.5) col *= 0.86 + 0.06 * vnoise(wpos.xz * 2.0);
+	}
+	// sealed cracks ("tar snakes"): transverse thermal cracks and the paving
+	// seam beside lane lines, only on older stretches
+	float lanesT = max(1.0, floor(2.0 * hw / 3.6 + 0.5));
+	float lwT = 2.0 * hw / lanesT;
+	if (!(onSlab || onOppSlab) && fade > 0.0) {
+		float cellV = floor(v / 9.0);
+		float hv = vhash(vec2(cellV, 4.0));
+		float cv = (cellV + 0.2 + 0.6 * hv) * 9.0 + 0.35 * sin(u * 1.3 + hv * 6.0) + 0.12 * sin(u * 4.1 + hv * 17.0);
+		float span = step(abs(u - (vhash(vec2(cellV, 9.0)) - 0.5) * 2.0 * hw), hw * (0.4 + 0.6 * vhash(vec2(cellV, 2.0))));
+		float tar = (1.0 - smoothstep(0.035, 0.035 + fwidth(v) * 1.5, abs(v - cv))) * step(0.5, hv) * span;
+		float kk = (u + hw) / lwT;
+		float seamU = -hw + floor(kk + 0.5) * lwT + 0.32 + 0.07 * sin(v * 0.37) + 0.04 * sin(v * 1.13);
+		tar = max(tar, (1.0 - smoothstep(0.018, 0.018 + fwidth(u) * 1.5, abs(u - seamU))) * step(0.55, vnoise(vec2(v * 0.025, 3.0))) * step(0.45, vnoise(vec2(v * 0.15, 8.0))) * 0.75);
+		col = mix(col, vec3(0.1, 0.1, 0.105), tar * 0.7 * fade * step(0.42, age));
+	}
+	// wheel paths polished lighter, oil drip strip darker down the lane centre
 	if (u > -hw && u < hw) {
 		float lc = abs(fract(k) - 0.5) * lw;
-		col *= 1.0 - 0.07 * smoothstep(0.35, 0.0, abs(lc - 0.85)) * fade;
+		col *= 1.0 + 0.06 * smoothstep(0.35, 0.0, abs(lc - 0.85)) * fade;
+		col *= 1.0 - 0.13 * smoothstep(0.45, 0.0, lc) * (0.6 + 0.4 * vnoise(vec2(v * 0.3, u))) * fade;
 	}
 	if (fwy) {
 		// transverse slab joints
-		col *= 1.0 - 0.25 * lineAA(fract(v / 4.6) * 4.6, 2.3, 0.05) * fade;
+		if (onSlab || onOppSlab) col *= 1.0 - 0.25 * lineAA(fract(v / 4.6) * 4.6, 2.3, 0.05) * fade;
+		// ground-in rumble strips on the shoulders
+		float rs = step(0.5, fract(v / 0.6)) * fade;
+		float inR = step(hw + 0.35, u) * step(u, hw + 0.75);
+		float inL = step(-hw - 0.75, u) * step(u, -hw - 0.35);
+		col *= 1.0 - 0.22 * rs * max(inR, inL);
 	}
 	vec3 white = vec3(0.92, 0.92, 0.88), yellow = vec3(0.93, 0.74, 0.18);
 	float m = 0.0;
 	vec3 mc = white;
-	float dl = fwy ? dash(v, 3.0, 12.0) : dash(v, 3.0, 12.0);
-	// our lane dividers
+	float dl = dash(v, 3.0, 12.0);
+	// our lane dividers (+ raised reflective markers in the gaps on freeways)
 	if (lanes > 1.5 && k > 0.5 && k < lanes - 0.5) {
 		float c = -hw + floor(k + 0.5) * lw;
 		m = max(m, lineAA(u, c, 0.13) * dl);
+		if (fwy || ramp) {
+			float rp = fract((v + 6.0) / 12.0) * 12.0;
+			float rpm = (1.0 - smoothstep(0.06, 0.09, abs(rp - 1.5))) * (1.0 - smoothstep(0.06, 0.09, abs(u - c)));
+			m = max(m, rpm * nearF * 1.5);
+		}
 	}
-	// right edge
-	m = max(m, lineAA(u, hw + 0.12, 0.15));
+	// right edge line (doubles as the bike lane line)
+	float edgeU = hw + 0.12;
+	m = max(m, lineAA(u, edgeU, 0.15));
+	if (bikeW > 0.5) {
+		// bike lane: stencil every 160 m with the arrow ahead of it
+		float bc = hw + 0.2 + bikeW * 0.5;
+		float pv = fract(v / 160.0) * 160.0 - 80.0;
+		vec2 bp = vec2(u - bc, pv) / 1.15;
+		float g = bikeGlyph(vec2(bp.x, bp.y)) * step(abs(pv), 1.2);
+		vec2 ap = vec2(u - bc, pv - 4.2);
+		float arrow = (1.0 - smoothstep(0.05, 0.07, abs(ap.x))) * step(-0.9, ap.y) * step(ap.y, 0.3);
+		arrow = max(arrow, step(0.3, ap.y) * step(ap.y, 0.9) * step(abs(ap.x), (0.9 - ap.y) * 0.45));
+		m = max(m, max(g, arrow) * fade);
+	}
 	float oppIn = -hw - gap;
 	if (fwy || ramp) {
 		float y = lineAA(u, -hw - 0.12, 0.15);
@@ -77,7 +154,9 @@ vec3 roadColor(vec4 r1, vec4 r2, vec3 wpos) {
 			if (y > 0.0) { mc = mix(mc, yellow, step(m, y)); m = max(m, y); }
 		}
 	}
-	col = mix(col, mc * (0.85 + 0.15 * n), m * 0.92);
+	// worn thermoplastic: paint shows the aggregate through it close up
+	float wear = mix(1.0, 0.7 + 0.3 * smoothstep(0.25, 0.6, agg), nearF) * (0.82 + 0.18 * vnoise(vec2(v * 0.7, u * 2.0)));
+	col = mix(col, mc * (0.85 + 0.15 * n), m * 0.92 * wear);
 	// beyond the pavement: sidewalk (city) or gravel shoulder (freeway)
 	float ofs = max(u - R, Lp - u);
 	if (ofs > 0.0) {
@@ -87,15 +166,17 @@ vec3 roadColor(vec4 r1, vec4 r2, vec3 wpos) {
 		} else {
 			vec3 walk = vec3(0.70, 0.68, 0.64) * (0.92 + n * 0.12);
 			walk *= 1.0 - 0.18 * lineAA(fract(v / 1.6) * 1.6, 0.8, 0.03) * fade;
+			walk *= 1.0 - 0.06 * smoothstep(0.55, 0.75, agg) * nearF;
 			vec3 curb = vec3(0.78, 0.77, 0.74);
 			col = ofs < 0.25 ? curb : walk;
 			col = mix(col, vec3(0.42, 0.52, 0.27) * (0.85 + n * 0.3), smoothstep(2.3, 2.6, ofs));
 		}
 	} else {
-		// gutter band along city curbs
+		// concrete gutter pan along city curbs
 		if (!fwy && !ramp) {
 			float g = min(R - u, u - Lp);
-			col = mix(col, vec3(0.55, 0.54, 0.51), smoothstep(0.6, 0.5, g));
+			col = mix(col, vec3(0.6, 0.59, 0.55) * (0.94 + 0.08 * n), smoothstep(0.62, 0.58, g));
+			col *= 1.0 - 0.25 * lineAA(g, 0.6, 0.03) * fade;
 		}
 	}
 	return pow(col, vec3(2.2));
@@ -107,11 +188,11 @@ export function roadMaterial() {
 	mat.extensions = { derivatives: true };
 	return withFog(mat, (shader) => {
 		shader.vertexShader = shader.vertexShader
-			.replace("#include <common>", "#include <common>\nattribute vec4 aR1;\nattribute vec4 aR2;\nvarying vec4 vR1;\nvarying vec4 vR2;\nvarying vec3 vWpos;")
-			.replace("#include <begin_vertex>", "#include <begin_vertex>\nvR1 = aR1; vR2 = aR2;")
+			.replace("#include <common>", "#include <common>\nattribute vec4 aR1;\nattribute vec4 aR2;\nattribute float aVl;\nvarying vec4 vR1;\nvarying vec4 vR2;\nvarying vec3 vWpos;\nvarying vec2 vLoc;")
+			.replace("#include <begin_vertex>", "#include <begin_vertex>\nvR1 = aR1; vR2 = aR2; vLoc = vec2(aR1.x, aVl);")
 			.replace("#include <worldpos_vertex>", "#include <worldpos_vertex>\nvWpos = (modelMatrix * vec4(transformed, 1.0)).xyz;");
 		shader.fragmentShader = shader.fragmentShader
-			.replace("#include <common>", "#include <common>\nvarying vec4 vR1;\nvarying vec4 vR2;\nvarying vec3 vWpos;\n" + NOISE_GLSL + ROAD_FRAG)
+			.replace("#include <common>", "#include <common>\nvarying vec4 vR1;\nvarying vec4 vR2;\nvarying vec3 vWpos;\nvarying vec2 vLoc;\nuniform vec3 uCam;\n" + NOISE_GLSL + ROAD_FRAG)
 			.replace("#include <map_fragment>", "diffuseColor.rgb = roadColor(vR1, vR2, vWpos);")
 			.replace("#include <emissivemap_fragment>", `#include <emissivemap_fragment>
 			#ifdef USE_FOG
@@ -190,7 +271,7 @@ export class Roads {
 		const r = this.route;
 		const S = 10;
 		const rings = i1 - i0 + 1;
-		const pos = new Float32Array(rings * S * 3), a1 = new Float32Array(rings * S * 4), a2 = new Float32Array(rings * S * 4);
+		const pos = new Float32Array(rings * S * 3), a1 = new Float32Array(rings * S * 4), a2 = new Float32Array(rings * S * 4), vl = new Float32Array(rings * S);
 		for (let i = i0, ring = 0; i <= i1; i++, ring++) {
 			const x = r.X[i], z = r.Z[i], y = r.Y[i];
 			const rx = -r.TZ[i], rz = r.TX[i];
@@ -211,7 +292,8 @@ export class Roads {
 				pos[o * 3 + 1] = y + hs[s];
 				pos[o * 3 + 2] = z + rz * us[s];
 				a1[o * 4] = us[s]; a1[o * 4 + 1] = i * r.step; a1[o * 4 + 2] = r.hw[i]; a1[o * 4 + 3] = k;
-				a2[o * 4] = r.gap[i]; a2[o * 4 + 1] = R; a2[o * 4 + 2] = L; a2[o * 4 + 3] = cb;
+				vl[o] = (i - i0) * r.step;
+				a2[o * 4] = r.gap[i]; a2[o * 4 + 1] = R; a2[o * 4 + 2] = L; a2[o * 4 + 3] = r.bike[i];
 			}
 		}
 		const idx = [];
@@ -224,6 +306,7 @@ export class Roads {
 		g.setAttribute("position", new THREE.BufferAttribute(pos, 3));
 		g.setAttribute("aR1", new THREE.BufferAttribute(a1, 4));
 		g.setAttribute("aR2", new THREE.BufferAttribute(a2, 4));
+		g.setAttribute("aVl", new THREE.BufferAttribute(vl, 1));
 		g.setIndex(idx);
 		g.computeVertexNormals();
 		// keep the driving surface normals straight up for even shading
