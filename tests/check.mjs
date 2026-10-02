@@ -1,4 +1,5 @@
 // Headless browser check for Citrus to Surf.
+// Needs network access for three.js, MapLibre and the map tiles.
 // Usage: node tests/check.mjs            (writes screenshots to tests/shots/)
 // Env:   CHROME_BIN=/path/to/chrome-headless-shell  SHOTS=0 to skip extra screenshots
 import { createRequire } from "module";
@@ -175,39 +176,110 @@ try {
 	const pl = await page.evaluate(() => ({ n: app.places.list.length, c: app.places.counts(), labels: app.places.pool.filter((L) => L.place).length }));
 	ok("Places snapshot loads (OSM cafes, food, viewpoints...)", pl.n > 500 && pl.c.cafe > 20 && pl.c.view > 5, `${pl.n} places, ${pl.c.cafe} cafes, ${pl.c.view} viewpoints, ${pl.labels} 3D labels`);
 
-	// explore map: open with G, markers, search, popup, category toggle, ride here, Esc
+	// explore map (MapLibre, 3D terrain): open with G, places, search, popup,
+	// category toggle, styles, 2D/3D, chapter fly-to, fly-along, ride here, Esc
+	const mapIdle = (pg, extra = 800) => pg.evaluate(async (extra) => {
+		const m = app.explore.map, t0 = performance.now();
+		await new Promise((r) => setTimeout(r, 300));
+		while (performance.now() - t0 < 30000 && (m.isMoving() || !m.areTilesLoaded())) await new Promise((r) => setTimeout(r, 150));
+		await new Promise((r) => setTimeout(r, extra));
+	}, extra);
 	await page.keyboard.press("KeyG");
-	await page.waitForSelector(".ex-pin, .ex-cluster", { timeout: 30000 });
-	const ex0 = await page.evaluate(() => ({ open: app.explore.open, pins: document.querySelectorAll(".ex-pin, .ex-cluster").length, rider: !!document.querySelector(".ex-rider"), tiles: document.querySelectorAll(".leaflet-tile").length, attr: document.querySelector(".leaflet-control-attribution").textContent }));
-	ok("Explore map opens with route, rider and places", ex0.open && ex0.pins > 5 && ex0.rider && ex0.tiles > 0 && /OpenStreetMap/.test(ex0.attr), `${ex0.pins} markers, ${ex0.tiles} tiles`);
+	await page.waitForFunction(() => app.explore.ready && app.explore.map.queryRenderedFeatures({ layers: ["pl-pin", "pl-cluster"] }).length > 5, null, { timeout: 60000 });
+	await mapIdle(page);
+	const ex0 = await page.evaluate(() => {
+		const m = app.explore.map;
+		return {
+			open: app.explore.open, pins: m.queryRenderedFeatures({ layers: ["pl-pin", "pl-cluster"] }).length, rider: !!document.querySelector(".ex-rider.maplibregl-marker"),
+			chapters: document.querySelectorAll(".ex-chapter.maplibregl-marker").length, terrain: !!m.getTerrain(), pitch: m.getPitch(), sky: !!m.getSky(),
+			route: app.explore.routeData.ahead.geometry.coordinates.length + app.explore.routeData.done.geometry.coordinates.length,
+			tiles: performance.getEntriesByType("resource").filter((e) => e.name.includes("tiles.maps.eox.at")).length,
+			dem: performance.getEntriesByType("resource").filter((e) => e.name.includes("elevation-tiles-prod")).length, attr: document.querySelector(".maplibregl-ctrl-attrib").textContent,
+		};
+	});
+	ok("Explore map opens in 3D with terrain, imagery, route, rider and places", ex0.open && ex0.pins > 5 && ex0.rider && ex0.chapters === 7 && ex0.terrain && ex0.pitch > 30 && ex0.sky && ex0.route > 1000 && ex0.tiles > 0 && ex0.dem > 0, `${ex0.pins} markers, ${ex0.tiles} imagery and ${ex0.dem} elevation tiles, pitch ${ex0.pitch.toFixed(0)}`);
+	ok("Map credits OpenStreetMap, EOX Sentinel-2 and the terrain tiles", /OpenStreetMap/.test(ex0.attr) && /Sentinel-2 cloudless/.test(ex0.attr) && /EOX/.test(ex0.attr) && /Terrain Tiles/.test(ex0.attr));
+	await shot(page, "13a-explore-follow");
 	const dBefore = await page.evaluate(() => app.rider.d);
-	await page.locator("#ex-map").focus();
+	const cBefore = await page.evaluate(() => app.explore.map.getCenter().toArray());
+	await page.locator("#ex-map canvas").focus();
 	await page.keyboard.down("ArrowLeft");
 	await wait(page, 700);
 	await page.keyboard.up("ArrowLeft");
+	await wait(page, 400);
 	const dAfter = await page.evaluate(() => app.rider.d);
-	ok("Arrow keys pan the map instead of steering", Math.abs(dAfter - dBefore) < 0.3, `d ${dBefore.toFixed(2)} -> ${dAfter.toFixed(2)}`);
+	const cAfter = await page.evaluate(() => app.explore.map.getCenter().toArray());
+	ok("Arrow keys pan the map instead of steering", Math.abs(dAfter - dBefore) < 0.3 && cAfter[0] < cBefore[0] - 1e-4, `d ${dBefore.toFixed(2)} -> ${dAfter.toFixed(2)}, lng ${cBefore[0].toFixed(4)} -> ${cAfter[0].toFixed(4)}`);
 	await page.fill("#ex-search", "beach");
 	await wait(page, 500);
 	const found = await page.evaluate(() => document.querySelectorAll("#ex-list li").length);
 	await page.click("#ex-list li button");
-	await page.waitForSelector(".leaflet-popup .pp-go", { timeout: 15000 });
-	const pop = await page.evaluate(() => document.querySelector(".leaflet-popup .pp-name").textContent);
+	await page.waitForSelector(".maplibregl-popup .pp-go", { timeout: 15000 });
+	const pop = await page.evaluate(() => document.querySelector(".maplibregl-popup .pp-name").textContent);
 	ok("Search lists matches and opens a popup", found > 0 && pop.length > 0, `${found} matches, popup "${pop}"`);
+	await mapIdle(page);
 	await shot(page, "13-explore-map");
 	await page.fill("#ex-search", "");
 	await page.click(".ex-cats .cat >> nth=0");
-	const off = await page.evaluate(() => !app.places.enabled.has("cafe"));
+	const off = await page.evaluate(() => !app.places.enabled.has("cafe") && !app.explore.placeData.features.some((f) => f.properties.c === "cafe"));
 	await page.click(".ex-cats .cat >> nth=0");
-	const on = await page.evaluate(() => app.places.enabled.has("cafe"));
+	const on = await page.evaluate(() => app.places.enabled.has("cafe") && app.explore.placeData.features.some((f) => f.properties.c === "cafe"));
 	ok("Category toggles switch on and off", off && on, "cafes");
+	// map styles: satellite, streets and hybrid (satellite with roads and labels)
+	const styles = {};
+	for (const v of ["satellite", "streets", "hybrid"]) {
+		await page.click(`#ex-style [data-v="${v}"]`);
+		styles[v] = await page.evaluate(() => {
+			const m = app.explore.map, vis = (id) => m.getLayoutProperty(id, "visibility") !== "none";
+			return { sat: vis("sat"), road: vis("road_motorway"), label: vis("label_city"), bld: vis("building-3d") };
+		});
+	}
+	ok("Style switcher: Satellite, Streets and Hybrid", styles.satellite.sat && !styles.satellite.road && !styles.streets.sat && styles.streets.road && styles.hybrid.sat && styles.hybrid.road && styles.hybrid.label && styles.hybrid.bld, JSON.stringify(styles.hybrid));
+	// per-chapter fly-to: Santa Ana Canyon, tilted and turned down the canyon
+	await page.click("#ex-chaps .chap >> nth=2");
+	await mapIdle(page, 1500);
+	const cam = await page.evaluate(() => { const m = app.explore.map; return { pitch: m.getPitch(), bearing: m.getBearing(), z: m.getZoom() }; });
+	ok("Chapter fly-to tilts and turns the 3D camera", cam.pitch > 60 && Math.abs(cam.bearing) > 90, `pitch ${cam.pitch.toFixed(0)}, bearing ${cam.bearing.toFixed(0)}, zoom ${cam.z.toFixed(1)}`);
+	await shot(page, "15-explore-3d-canyon");
+	await page.click("#ex-chaps .chap >> nth=6");
+	await mapIdle(page, 1500);
+	await shot(page, "16-explore-3d-coast");
+	// 3D/2D toggle
+	await page.click("#ex-3d");
+	await page.waitForFunction(() => !app.explore.map.isMoving(), null, { timeout: 10000 });
+	await wait(page, 900);
+	const flat = await page.evaluate(() => ({ terrain: !!app.explore.map.getTerrain(), pitch: app.explore.map.getPitch(), label: document.getElementById("ex-3d").textContent }));
+	await page.click("#ex-3d");
+	await wait(page, 1200);
+	const round = await page.evaluate(() => ({ terrain: !!app.explore.map.getTerrain(), pitch: app.explore.map.getPitch() }));
+	ok("3D/2D toggle flattens and restores the terrain", !flat.terrain && flat.pitch < 1 && flat.label === "2D" && round.terrain && round.pitch > 30, `2D pitch ${flat.pitch.toFixed(0)}, 3D pitch ${round.pitch.toFixed(0)}`);
+	// fly along the route
+	await page.click("#ex-fly");
+	await page.waitForFunction(() => app.explore.flying && app.explore.flying.s > 2000, null, { timeout: 20000 });
+	const f0 = await page.evaluate(() => ({ s: app.explore.flying.s, c: app.explore.map.getCenter().toArray() }));
+	await wait(page, 2500);
+	const f1 = await page.evaluate(() => ({ s: app.explore.flying && app.explore.flying.s, c: app.explore.map.getCenter().toArray(), pitch: app.explore.map.getPitch(), status: document.getElementById("ex-status").textContent }));
+	await shot(page, "17-explore-fly-along");
+	await page.click("#ex-fly");
+	const stopped = await page.evaluate(() => !app.explore.flying);
+	ok("Fly the route moves a tilted camera along the ride", f1.s > f0.s + 1500 && Math.hypot(f1.c[0] - f0.c[0], f1.c[1] - f0.c[1]) > 0.005 && f1.pitch > 55 && /Flying the route/.test(f1.status) && stopped, `${((f1.s - f0.s) / 1000).toFixed(1)} km in 2.5 s, ${f1.status}`);
+	// dark mode recolours the street map and the sky
+	const light = await page.evaluate(() => { app.explore.setStyle("streets"); return JSON.stringify(app.explore.map.getPaintProperty("background", "background-color")); });
+	await page.evaluate(() => { document.documentElement.dataset.theme = "dark"; });
+	await wait(page, 300);
+	const dark = await page.evaluate(() => ({ bg: JSON.stringify(app.explore.map.getPaintProperty("background", "background-color")), sky: app.explore.map.getSky()["sky-color"] }));
+	await page.evaluate(() => { app.explore.setStyle("hybrid"); app.explore.flyChapter(4); });
+	await mapIdle(page, 1500);
+	await shot(page, "18-explore-dark");
+	await page.evaluate(() => { document.documentElement.dataset.theme = "light"; });
+	ok("Dark mode recolours the map and sky", light !== dark.bg && dark.sky === "#0c1a2e", `${light} -> ${dark.bg}`);
 	await page.fill("#ex-search", "Crystal Cove");
 	await wait(page, 400);
 	await page.click("#ex-list li button");
-	await page.waitForSelector(".leaflet-popup .pp-go", { timeout: 15000 });
+	await page.waitForSelector(".maplibregl-popup .pp-go", { timeout: 15000 });
 	await wait(page, 400);
-	const target = await page.evaluate(() => parseFloat(document.querySelector(".leaflet-popup .pp-go").dataset.s));
-	await page.click(".leaflet-popup .pp-go");
+	const target = await page.evaluate(() => parseFloat(document.querySelector(".maplibregl-popup .pp-go").dataset.s));
+	await page.click(".maplibregl-popup .pp-go");
 	await page.waitForFunction(() => !app.explore.open && !app.paused, null, { timeout: 60000 });
 	const sNow = await page.evaluate(() => app.rider.s);
 	ok("Ride here jumps the bike to the place", Math.abs(sNow - target) < 400, `target ${(target / 1000).toFixed(1)} km, now ${(sNow / 1000).toFixed(1)} km`);
@@ -284,10 +356,13 @@ try {
 		await shot(P.page, `12-${name}-ride`);
 		// tap the minimap to explore
 		await P.page.tap("#map-wrap");
-		await P.page.waitForSelector(".ex-pin, .ex-cluster", { timeout: 30000 });
-		await wait(P.page, 800);
-		const ex = await P.page.evaluate(() => ({ open: app.explore.open, sw: document.documentElement.scrollWidth, iw: innerWidth, sheet: document.getElementById("ex-side").getBoundingClientRect().height }));
-		ok(`Phone ${name}: minimap opens the explore map`, ex.open && ex.sw <= ex.iw && ex.sheet > 100, `sheet ${Math.round(ex.sheet)} px, ${ex.sw}/${ex.iw}`);
+		await P.page.waitForFunction(() => app.explore.ready && app.explore.map.queryRenderedFeatures({ layers: ["pl-pin", "pl-cluster"] }).length > 0, null, { timeout: 60000 });
+		await mapIdle(P.page);
+		const ex = await P.page.evaluate(() => {
+			const bar = document.getElementById("ex-bar").getBoundingClientRect();
+			return { open: app.explore.open, sw: document.documentElement.scrollWidth, iw: innerWidth, sheet: document.getElementById("ex-side").getBoundingClientRect().height, terrain: !!app.explore.map.getTerrain(), bar: bar.right <= innerWidth + 1 };
+		});
+		ok(`Phone ${name}: minimap opens the 3D explore map`, ex.open && ex.sw <= ex.iw && ex.sheet > 100 && ex.terrain && ex.bar, `sheet ${Math.round(ex.sheet)} px, ${ex.sw}/${ex.iw}`);
 		await shot(P.page, `14-${name}-explore`);
 		await P.page.tap("#ex-close");
 		ok(`No console errors (${name})`, P.errors.length === 0, P.errors.slice(0, 3).join(" | "));

@@ -310,7 +310,8 @@ async function start() {
 			buildings.update(rider.s);
 			streets.update(rider.s);
 		}
-		renderer.render(scene, camera);
+		// the explore map covers the whole screen; skip drawing the scene under it
+		if (!(explore.open && explore.ready)) renderer.render(scene, camera);
 		app.frames++;
 		app.zone = zone;
 		app.hour = hour;

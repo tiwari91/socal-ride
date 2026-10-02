@@ -107,7 +107,7 @@
 			<dt>Up / W</dt><dd>Throttle (takes the bars in Cruise)</dd>
 			<dt>Down / S / Space</dt><dd>Brake</dd>
 			<dt>Left, Right / A, D</dt><dd>Steer</dd>
-			<dt>G</dt><dd>Explore map and places</dd>
+			<dt>G</dt><dd>Explore map and places (arrows pan, Shift + arrows tilt and turn)</dd>
 			<dt>C</dt><dd>Next camera</dd>
 			<dt>M</dt><dd>Cruise or Ride</dd>
 			<dt>1 to 7</dt><dd>Jump to a chapter</dd>
@@ -116,7 +116,7 @@
 			<dt>Esc</dt><dd>Close panels</dd>
 		</dl>
 	</details>
-	<p class="credits">Map, roads and places &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a> (ODbL). Map view: Leaflet. Elevation: NOAA ETOPO1. Three.js. <a href="https://github.com/tiwari91/socal-ride" target="_blank" rel="noopener">Source</a></p>
+	<p class="credits">Map, roads and places &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a> (ODbL). Explore map: MapLibre GL JS with OpenFreeMap / OpenMapTiles streets, Sentinel-2 cloudless imagery by EOX (Copernicus Sentinel data 2016, CC BY 4.0) and AWS Terrain Tiles. Ride elevation: NOAA ETOPO1. Three.js. <a href="https://github.com/tiwari91/socal-ride" target="_blank" rel="noopener">Source</a></p>
 </aside>
 
 <section id="explore" class="explore" hidden aria-label="Explore map">
@@ -133,9 +133,18 @@
 			<svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>
 		</button>
 	</header>
+	<div class="ex-bar" id="ex-bar" role="toolbar" aria-label="Map view">
+		<div class="ex-seg" id="ex-style" role="radiogroup" aria-label="Map style">
+			<button data-v="hybrid" role="radio" title="Satellite imagery with roads and labels">Hybrid</button><button data-v="satellite" role="radio" title="Sentinel-2 satellite imagery"><span class="l">Satellite</span><span class="s">Sat</span></button><button data-v="streets" role="radio" title="OpenStreetMap street map">Streets</button>
+		</div>
+		<button class="ex-btn" id="ex-3d" aria-pressed="true">3D</button>
+		<button class="ex-btn" id="ex-overview" title="Show the whole route"><span class="l">Overview</span><span class="s">Route</span></button>
+		<button class="ex-btn ex-fly" id="ex-fly" aria-pressed="false" title="Fly along the whole route in 3D"><span class="l">Fly the route</span><span class="s">Fly</span></button>
+	</div>
 	<aside class="ex-side" id="ex-side">
 		<button class="ex-grip" id="ex-sheet-toggle" aria-label="Show or hide the list of places"><i></i></button>
 		<h2>Places along the ride</h2>
+		<div class="ex-chaps" id="ex-chaps" aria-label="Fly to a chapter"></div>
 		<div class="ex-cats" id="ex-cats" aria-label="Categories"></div>
 		<div class="ex-tools">
 			<label class="ex-check"><input type="checkbox" id="ex-labels"> Label nearby places in 3D</label>
@@ -143,7 +152,7 @@
 		</div>
 		<div class="ex-count" id="ex-count" aria-live="polite"></div>
 		<ul class="ex-list" id="ex-list"></ul>
-		<p class="ex-credit">Places and map &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a>, ODbL. Tap a place for hours and links; Ride here jumps the bike to it.</p>
+		<p class="ex-credit">Places and streets &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a>, ODbL, via <a href="https://openfreemap.org" target="_blank" rel="noopener">OpenFreeMap</a> and <a href="https://www.openmaptiles.org/" target="_blank" rel="noopener">OpenMapTiles</a>. Imagery: Sentinel-2 cloudless by EOX (Copernicus Sentinel data 2016), CC BY 4.0. Terrain: AWS Terrain Tiles. Right-drag or Ctrl-drag to tilt and turn (two fingers on a phone). Tap a place for hours and links; Ride here jumps the bike to it.</p>
 	</aside>
 	<div class="ex-status" id="ex-status" aria-live="polite"></div>
 </section>
